@@ -57,6 +57,34 @@
   return self;
 }
 
++ (void)configureWithEnvironment:(USPAuthEnvironment)env consumerKey:(NSString *)consumerKey consumerSecret:(NSString *)consumerSecret appKey:(NSString *)appKey {
+  USPAuthConfig *cfg = nil;
+
+  switch (env) {
+    case USPAuthEnvironmentDev:
+      cfg = [USPAuthConfig devWithConsumerKey:consumerKey consumerSecret:consumerSecret appKey:appKey];
+      break;
+
+    case USPAuthEnvironmentProd:
+      cfg = [USPAuthConfig prodWithConsumerKey:consumerKey consumerSecret:consumerSecret appKey:appKey];
+      break;
+
+    case USPAuthEnvironmentCustom:
+    default: {
+      // Se quiser suportar custom aqui, defina uma baseURL via outra API sua,
+      // ou troque este bloco conforme sua necessidade:
+      NSString *baseURL = @""; // <- defina a URL custom se for usar este case
+      cfg = [USPAuthConfig customWithBaseURL:baseURL consumerKey:consumerKey consumerSecret:consumerSecret appKey:appKey];
+      break;
+    }
+  }
+
+  [USPAuthService sharedService].config = cfg;
+
+  // compat opcional (se ainda houver código lendo appKey direto do service)
+  [USPAuthService sharedService].appKey = appKey;
+}
+
 - (NSDictionary<NSString*,id>*)userData {
   NSData *data = [self.defaults objectForKey:@"userData"];
   if (!data) return @{};

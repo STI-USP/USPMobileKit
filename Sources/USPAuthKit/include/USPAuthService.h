@@ -10,6 +10,7 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <WebKit/WebKit.h>
+#import "USPAuthConfig.h"
 @class USPAuthUser;
 @class USPAuthConfig;
 
@@ -31,6 +32,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Singleton
 + (instancetype)sharedService;
+
+/// Config
++ (void)configureWithEnvironment:(USPAuthEnvironment)env consumerKey:(NSString *)consumerKey consumerSecret:(NSString *)consumerSecret appKey:(NSString *)appKey;
+
 
 /// Garante que o user esteja logado:
 /// • se já houver cache, devolve imediatamente
