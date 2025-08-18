@@ -53,6 +53,9 @@
     
     _appKey = @"";
     _isLoginPresentationInProgress = NO;
+    
+    _notificationToken = [_defaults stringForKey:@"notificationToken"];
+    _notificationPlatform = ([_defaults stringForKey:@"notificationPlatform"] ?: @"F"); // default: Firebase
   }
   return self;
 }
@@ -83,6 +86,16 @@
 
   // compat opcional (se ainda houver código lendo appKey direto do service)
   [USPAuthService sharedService].appKey = appKey;
+}
+
+- (void)updateNotificationToken:(nullable NSString *)token {
+  _notificationToken = [token copy];
+  if (token.length) {
+    [self.defaults setObject:token forKey:@"notificationToken"];
+  } else {
+    [self.defaults removeObjectForKey:@"notificationToken"];
+  }
+  [self.defaults synchronize];
 }
 
 - (NSDictionary<NSString*,id>*)userData {
@@ -284,9 +297,20 @@
 
   NSURL *url = [NSURL URLWithString:[kOAuthServiceBaseURL stringByAppendingString:@"/registrar"]];
   NSString *appKey = self.config ? self.config.appKey : self.appKey ?: @"";
-  NSDictionary *body = @{ @"token": wsUserId, @"app": appKey };
-  NSLog(@"[USPAuth] Enviando POST para %@ com body: %@", url, body);
+  NSString *notif = self.notificationToken ?: @"";
+  NSString *platform = self.notificationPlatform.length ? self.notificationPlatform : @"F";
+  NSString *amb = @"I";
 
+  NSDictionary *body = @{
+    @"token": wsUserId,
+    @"tokenNotificacao": notif,
+    @"app": appKey,
+    @"ambiente": amb,
+    @"plataformaNotificacao": platform
+  };
+  
+  NSLog(@"[USPAuth] Enviando POST para %@ com body: %@", url, body);
+  
   [[HTTPClient sharedClient] postJSON:body toURL:url completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable resp, NSError * _Nullable err) {
     dispatch_async(dispatch_get_main_queue(), ^{
       if (data) {
@@ -355,6 +379,8 @@
   self.oauthTokenSecret = nil;
   [self.defaults removeObjectForKey:@"userData"];
   [self.defaults removeObjectForKey:@"isRegistered"];
+  [self.defaults removeObjectForKey:@"notificationToken"];
+  [self.defaults removeObjectForKey:@"notificationPlatform"];
   [self.defaults synchronize];
   NSLog(@"User session cleared.");
 }

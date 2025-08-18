@@ -27,6 +27,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *appKey;
 @property (nonatomic, strong) USPAuthConfig *config;
 
+/// Token de push do dispositivo (APNs ou FCM). Se setado, será enviado no /registrar.
+@property (nonatomic, copy, nullable) NSString *notificationToken;
+@property (nonatomic, copy) NSString *notificationPlatform;
+
 /// Dados do usuário retornados pela API (JSON desserializado)
 @property (nonatomic, readonly) NSDictionary<NSString*, id> *userData;
 
@@ -35,6 +39,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Config
 + (void)configureWithEnvironment:(USPAuthEnvironment)env consumerKey:(NSString *)consumerKey consumerSecret:(NSString *)consumerSecret appKey:(NSString *)appKey;
+
+/// Atualiza o token de push em memória + persiste em NSUserDefaults
+- (void)updateNotificationToken:(nullable NSString *)token;
 
 
 /// Garante que o user esteja logado:
