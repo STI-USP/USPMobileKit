@@ -11,6 +11,7 @@
 #import <Foundation/Foundation.h>
 #import <WebKit/WebKit.h>
 @class USPAuthUser;
+@class USPAuthConfig;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -23,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Chave da sua aplicação a ser enviada no registro de token.
 @property (nonatomic, copy) NSString *appKey;
+@property (nonatomic, strong) USPAuthConfig *config;
 
 /// Dados do usuário retornados pela API (JSON desserializado)
 @property (nonatomic, readonly) NSDictionary<NSString*, id> *userData;

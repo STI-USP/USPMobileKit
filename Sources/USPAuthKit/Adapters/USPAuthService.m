@@ -20,6 +20,7 @@
 #import "OAuth1Controller.h"
 #import "LoginWebViewController.h"
 #import "USPAuthUser.h"
+#import "USPAuthConfig.h"
 
 @interface USPAuthService ()
 
@@ -188,7 +189,8 @@
                                                     parameters:nil
                                                     HTTPmethod:@"POST"
                                                     oauthToken:self.oauthToken
-                                                   oauthSecret:self.oauthTokenSecret];
+                                                   oauthSecret:self.oauthTokenSecret
+                                                        config:self.config];
   if (!req) {
     NSError *e = [NSError errorWithDomain:@"USPAuthService"
                                      code:0
@@ -253,7 +255,8 @@
   }
 
   NSURL *url = [NSURL URLWithString:[kOAuthServiceBaseURL stringByAppendingString:@"/registrar"]];
-  NSDictionary *body = @{ @"token": wsUserId, @"app": _appKey };
+  NSString *appKey = self.config ? self.config.appKey : self.appKey ?: @"";
+  NSDictionary *body = @{ @"token": wsUserId, @"app": appKey };
   NSLog(@"[USPAuth] Enviando POST para %@ com body: %@", url, body);
 
   [[HTTPClient sharedClient] postJSON:body toURL:url completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable resp, NSError * _Nullable err) {

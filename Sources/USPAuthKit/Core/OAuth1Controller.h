@@ -1,8 +1,7 @@
+// OAuth1Controller.h
+// USPAuthKit
 //
-//  OAuth1Controller.h
-//  NuAuthKit
-//
-//  Created by Vagner Machado on 22/05/25.
+// Adapted by Vagner Machado on 22/05/25.
 //
 
 #import <Foundation/Foundation.h>
@@ -10,20 +9,25 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Fluxo OAuth 1.0: requestToken → authorize → accessToken
+@class USPAuthConfig;
+
 @interface OAuth1Controller : NSObject <WKNavigationDelegate>
 
-/// Inicia login, apontando WKWebView e recebe tokens finais
+- (instancetype)initWithConfig:(USPAuthConfig *)config NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
+
+/// Passo único de login (request token → authorize → access token).
 - (void)loginWithWebView:(WKWebView *)webView
-              completion:(void (^)(NSDictionary<NSString*, NSString*> * _Nullable oauthTokens,
+              completion:(void (^)(NSDictionary<NSString*,NSString*> * _Nullable accessParams,
                                    NSError * _Nullable error))completion;
 
-/// Métodos estáticos auxiliares (base string, assinatura, parâmetros padrão)
-+ (NSURLRequest *)preparedRequestForPath:(NSString *)path
-                              parameters:(nullable NSDictionary *)queryParameters
-                              HTTPmethod:(NSString *)HTTPmethod
-                              oauthToken:(NSString *)oauthToken
-                             oauthSecret:(NSString *)oauthTokenSecret;
+/// Constrói uma request assinada para um endpoint OAuth 1.0a (HMAC-SHA1).
++ (NSURLRequest * _Nullable)preparedRequestForPath:(NSString *)path
+                                        parameters:(nullable NSDictionary *)queryParameters
+                                        HTTPmethod:(NSString *)HTTPmethod
+                                        oauthToken:(NSString *)oauth_token
+                                       oauthSecret:(NSString *)oauth_token_secret
+                                            config:(USPAuthConfig *)config;
 
 @end
 

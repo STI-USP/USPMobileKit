@@ -10,6 +10,7 @@
 #import "OAuth1Controller.h"
 #import "USPAuthService.h"
 #import <WebKit/WebKit.h>
+#import "USPAuthConfig.h"
 
 @interface LoginWebViewController ()
 @property (nonatomic, strong) WKWebView *webView;
@@ -23,7 +24,10 @@
 #pragma mark - Init
 - (instancetype)init {
   if ((self = [super init])) {
-    _oauthController = [[OAuth1Controller alloc] init];
+    USPAuthConfig *cfg = [USPAuthService sharedService].config;
+    // Caso a config não esteja setada, é melhor falhar cedo para evitar login sem baseURL/keys
+    NSAssert(cfg != nil, @"USPAuthService.config não configurado. Defina a config (baseURL/keys/appKey) antes do login.");
+    _oauthController = [[OAuth1Controller alloc] initWithConfig:cfg];
   }
   return self;
 }

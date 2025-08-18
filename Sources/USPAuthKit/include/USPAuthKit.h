@@ -15,6 +15,7 @@
 #import "USPAuthService.h"
 #import "USPAuthUser.h"
 #import "USPAuthVinculo.h"
+#import "USPAuthConfig.h"
 
 //! Project version number for USPAuthKit.
 FOUNDATION_EXPORT double USPAuthKitVersionNumber;
