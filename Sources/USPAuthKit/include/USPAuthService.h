@@ -10,7 +10,9 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <WebKit/WebKit.h>
+#import "USPAuthConfig.h"
 @class USPAuthUser;
+@class USPAuthConfig;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -23,12 +25,24 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Chave da sua aplicação a ser enviada no registro de token.
 @property (nonatomic, copy) NSString *appKey;
+@property (nonatomic, strong) USPAuthConfig *config;
+
+/// Token de push do dispositivo (APNs ou FCM). Se setado, será enviado no /registrar.
+@property (nonatomic, copy, nullable) NSString *notificationToken;
+@property (nonatomic, copy) NSString *notificationPlatform;
 
 /// Dados do usuário retornados pela API (JSON desserializado)
 @property (nonatomic, readonly) NSDictionary<NSString*, id> *userData;
 
 /// Singleton
 + (instancetype)sharedService;
+
+/// Config
++ (void)configureWithEnvironment:(USPAuthEnvironment)env consumerKey:(NSString *)consumerKey consumerSecret:(NSString *)consumerSecret appKey:(NSString *)appKey;
+
+/// Atualiza o token de push em memória + persiste em NSUserDefaults
+- (void)updateNotificationToken:(nullable NSString *)token;
+
 
 /// Garante que o user esteja logado:
 /// • se já houver cache, devolve imediatamente

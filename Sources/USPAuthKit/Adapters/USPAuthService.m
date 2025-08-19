@@ -20,6 +20,7 @@
 #import "OAuth1Controller.h"
 #import "LoginWebViewController.h"
 #import "USPAuthUser.h"
+#import "USPAuthConfig.h"
 
 @interface USPAuthService ()
 
@@ -52,8 +53,66 @@
     
     _appKey = @"";
     _isLoginPresentationInProgress = NO;
+    
+    _notificationToken = [_defaults stringForKey:@"notificationToken"];
+    _notificationPlatform = ([_defaults stringForKey:@"notificationPlatform"] ?: @"F"); // default: Firebase
   }
   return self;
+}
+
++ (void)configureWithEnvironment:(USPAuthEnvironment)env consumerKey:(NSString *)consumerKey consumerSecret:(NSString *)consumerSecret appKey:(NSString *)appKey {
+  USPAuthConfig *cfg = nil;
+
+  switch (env) {
+    case USPAuthEnvironmentDev:
+      cfg = [USPAuthConfig devWithConsumerKey:consumerKey consumerSecret:consumerSecret appKey:appKey];
+      break;
+
+    case USPAuthEnvironmentProd:
+      cfg = [USPAuthConfig prodWithConsumerKey:consumerKey consumerSecret:consumerSecret appKey:appKey];
+      break;
+
+    case USPAuthEnvironmentCustom:
+    default: {
+      // Se quiser suportar custom aqui, defina uma baseURL via outra API sua,
+      // ou troque este bloco conforme sua necessidade:
+      NSString *baseURL = @""; // <- defina a URL custom se for usar este case
+      cfg = [USPAuthConfig customWithBaseURL:baseURL consumerKey:consumerKey consumerSecret:consumerSecret appKey:appKey];
+      break;
+    }
+  }
+
+  [USPAuthService sharedService].config = cfg;
+
+  // compat opcional (se ainda houver código lendo appKey direto do service)
+  [USPAuthService sharedService].appKey = appKey;
+}
+
+- (void)updateNotificationToken:(nullable NSString *)token {
+  // evita trabalho se não mudou
+  if ((token ?: @"").length == 0 && (self.notificationToken ?: @"").length == 0) return;
+  if (token && [token isEqualToString:self.notificationToken ?: @""]) return;
+
+  _notificationToken = [token copy];
+  if (token.length) {
+    [self.defaults setObject:token forKey:@"notificationToken"];
+  } else {
+    [self.defaults removeObjectForKey:@"notificationToken"];
+  }
+  [self.defaults synchronize];
+
+  // se já estiver logado e com userData, dispara o /registrar imediatamente
+  if ([self isLoggedIn]) {
+    [self registerTokenWithCompletion:^(NSError * _Nullable error) {
+      if (error) {
+        NSLog(@"[USPAuth] Falha ao registrar token de push após update: %@", error.localizedDescription);
+      } else {
+        NSLog(@"[USPAuth] Token de push registrado com sucesso após update.");
+      }
+    }];
+  } else {
+    NSLog(@"[USPAuth] Push token atualizado, registro será feito após login.");
+  }
 }
 
 - (NSDictionary<NSString*,id>*)userData {
@@ -188,7 +247,8 @@
                                                     parameters:nil
                                                     HTTPmethod:@"POST"
                                                     oauthToken:self.oauthToken
-                                                   oauthSecret:self.oauthTokenSecret];
+                                                   oauthSecret:self.oauthTokenSecret
+                                                        config:self.config];
   if (!req) {
     NSError *e = [NSError errorWithDomain:@"USPAuthService"
                                      code:0
@@ -253,9 +313,21 @@
   }
 
   NSURL *url = [NSURL URLWithString:[kOAuthServiceBaseURL stringByAppendingString:@"/registrar"]];
-  NSDictionary *body = @{ @"token": wsUserId, @"app": _appKey };
-  NSLog(@"[USPAuth] Enviando POST para %@ com body: %@", url, body);
+  NSString *appKey = self.config ? self.config.appKey : self.appKey ?: @"";
+  NSString *notif = self.notificationToken ?: @"";
+  NSString *platform = self.notificationPlatform.length ? self.notificationPlatform : @"F";
+  NSString *amb = @"I";
 
+  NSDictionary *body = @{
+    @"token": wsUserId,
+    @"tokenNotificacao": notif,
+    @"app": appKey,
+    @"ambiente": amb,
+    @"plataformaNotificacao": platform
+  };
+  
+  NSLog(@"[USPAuth] Enviando POST para %@ com body: %@", url, body);
+  
   [[HTTPClient sharedClient] postJSON:body toURL:url completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable resp, NSError * _Nullable err) {
     dispatch_async(dispatch_get_main_queue(), ^{
       if (data) {
@@ -324,6 +396,8 @@
   self.oauthTokenSecret = nil;
   [self.defaults removeObjectForKey:@"userData"];
   [self.defaults removeObjectForKey:@"isRegistered"];
+  [self.defaults removeObjectForKey:@"notificationToken"];
+  [self.defaults removeObjectForKey:@"notificationPlatform"];
   [self.defaults synchronize];
   NSLog(@"User session cleared.");
 }
