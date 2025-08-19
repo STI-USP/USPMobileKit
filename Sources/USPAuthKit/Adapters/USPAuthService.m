@@ -89,6 +89,10 @@
 }
 
 - (void)updateNotificationToken:(nullable NSString *)token {
+  // evita trabalho se não mudou
+  if ((token ?: @"").length == 0 && (self.notificationToken ?: @"").length == 0) return;
+  if (token && [token isEqualToString:self.notificationToken ?: @""]) return;
+
   _notificationToken = [token copy];
   if (token.length) {
     [self.defaults setObject:token forKey:@"notificationToken"];
@@ -96,6 +100,19 @@
     [self.defaults removeObjectForKey:@"notificationToken"];
   }
   [self.defaults synchronize];
+
+  // se já estiver logado e com userData, dispara o /registrar imediatamente
+  if ([self isLoggedIn]) {
+    [self registerTokenWithCompletion:^(NSError * _Nullable error) {
+      if (error) {
+        NSLog(@"[USPAuth] Falha ao registrar token de push após update: %@", error.localizedDescription);
+      } else {
+        NSLog(@"[USPAuth] Token de push registrado com sucesso após update.");
+      }
+    }];
+  } else {
+    NSLog(@"[USPAuth] Push token atualizado, registro será feito após login.");
+  }
 }
 
 - (NSDictionary<NSString*,id>*)userData {
