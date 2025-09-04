@@ -36,6 +36,7 @@
 @synthesize oauthTokenSecret = _oauthTokenSecret;
 
 + (instancetype)sharedService {
+  static NSString * const kOAuthServiceBaseURL = @"https://uspdigital.usp.br/mobile/servicos/oauth";
   static USPAuthService *svc;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -312,7 +313,8 @@
     return;
   }
 
-  NSURL *url = [NSURL URLWithString:[kOAuthServiceBaseURL stringByAppendingString:@"/registrar"]];
+  NSString *baseURL = self.config ? self.config.baseURL : kOAuthServiceBaseURL;
+  NSURL *url = [NSURL URLWithString:[baseURL stringByAppendingString:@"/registrar"]];
   NSString *appKey = self.config ? self.config.appKey : self.appKey ?: @"";
   NSString *notif = self.notificationToken ?: @"";
   NSString *platform = self.notificationPlatform.length ? self.notificationPlatform : @"F";
