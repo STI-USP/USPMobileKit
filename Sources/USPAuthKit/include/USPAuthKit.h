@@ -8,8 +8,12 @@
 //
 
 #import <Foundation/Foundation.h>
+#if __has_include(<WebKit/WebKit.h>)
 #import <WebKit/WebKit.h>
+#endif
+#if __has_include(<UIKit/UIKit.h>)
 #import <UIKit/UIKit.h>
+#endif
 
 // Public interfaces
 #import "USPAuthService.h"

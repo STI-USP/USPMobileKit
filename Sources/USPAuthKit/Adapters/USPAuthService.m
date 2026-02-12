@@ -3,37 +3,49 @@
 //
 // Created by Vagner Machado on 22/05/25.
 //
-// Fluxo completo:
-//  • tenta cache
-//  • apresenta login
-//  • faz OAuth1, grava tokens (via LoginWebViewController setting them on sharedService)
-//  • fetch de usuário
-//  • register token no backend
-//  • devolve userData ou erro
-//
 
 #if __has_include(<UIKit/UIKit.h>)
 
 #import "USPAuthService.h"
 #import "HTTPClient.h"
-#import "OAuthConfig.h"
 #import "OAuth1Controller.h"
 #import "LoginWebViewController.h"
 #import "USPAuthUser.h"
 #import "USPAuthConfig.h"
+#import "USPAuthSessionStore.h"
+
+static NSString * const kUSPAuthServiceErrorDomain = @"USPAuthService";
+static NSString * const kUserInfoPath = @"/wsusuario/oauth/usuariousp";
+static NSString * const kRegisterPath = @"/mobile/servicos/oauth/registrar";
+static NSString * const kInvalidatePath = @"/mobile/servicos/oauth/invalidar";
+static NSString * const kCheckPath = @"/mobile/servicos/oauth/consultar";
+static NSString * const kBackendHeaderName = @"DEV-USP-MOBILE";
+static NSString * const kDefaultBackendHeaderValue = @"820ecd52-849f-4815-8eb3-bbf9f4440ac5";
+
+typedef NS_ENUM(NSInteger, USPAuthServiceErrorCode) {
+  USPAuthServiceErrorCodeMissingConfig = 1000,
+  USPAuthServiceErrorCodeLoginInProgress = 1001,
+  USPAuthServiceErrorCodeMissingOAuthTokens = 1002,
+  USPAuthServiceErrorCodeInvalidRequest = 1003,
+  USPAuthServiceErrorCodeEmptyResponse = 1004,
+  USPAuthServiceErrorCodeInvalidResponse = 1005,
+  USPAuthServiceErrorCodeMissingWSUserId = 1006,
+  USPAuthServiceErrorCodeInvalidURL = 1007,
+};
 
 @interface USPAuthService ()
 
-@property (nonatomic, strong) NSUserDefaults *defaults;
+@property (nonatomic, strong) USPAuthSessionStore *sessionStore;
+@property (nonatomic, strong) HTTPClient *httpClient;
+@property (nonatomic, strong) NSURLSession *urlSession;
+@property (nonatomic, strong, nullable) OAuth1Controller *activeOAuthController;
 @property (nonatomic, assign) BOOL isLoginPresentationInProgress;
 
 @end
 
 @implementation USPAuthService
 
-// Public properties for OAuth tokens, managed by setters
-@synthesize oauthToken = _oauthToken;
-@synthesize oauthTokenSecret = _oauthTokenSecret;
+#pragma mark - Lifecycle
 
 + (instancetype)sharedService {
   static USPAuthService *svc;
@@ -45,22 +57,32 @@
 }
 
 - (instancetype)init {
-  if (self = [super init]) {
-    _defaults = [NSUserDefaults standardUserDefaults];
+  return [self initWithUserDefaults:[NSUserDefaults standardUserDefaults]];
+}
 
-    _oauthToken = [_defaults stringForKey:@"oauthToken"];
-    _oauthTokenSecret = [_defaults stringForKey:@"oauthTokenSecret"];
-    
+- (instancetype)initWithUserDefaults:(NSUserDefaults *)defaults {
+  NSParameterAssert(defaults);
+  if (self = [super init]) {
+    _sessionStore = [[USPAuthSessionStore alloc] initWithDefaults:defaults];
+    _httpClient = [HTTPClient sharedClient];
+    _urlSession = [NSURLSession sharedSession];
     _appKey = @"";
+    _backendHeaderValue = kDefaultBackendHeaderValue;
+    _oauthToken = [_sessionStore.oauthToken copy];
+    _oauthTokenSecret = [_sessionStore.oauthTokenSecret copy];
+    _notificationToken = [_sessionStore.notificationToken copy];
+    _notificationPlatform = [_sessionStore.notificationPlatform copy];
     _isLoginPresentationInProgress = NO;
-    
-    _notificationToken = [_defaults stringForKey:@"notificationToken"];
-    _notificationPlatform = ([_defaults stringForKey:@"notificationPlatform"] ?: @"F"); // default: Firebase
   }
   return self;
 }
 
-+ (void)configureWithEnvironment:(USPAuthEnvironment)env consumerKey:(NSString *)consumerKey consumerSecret:(NSString *)consumerSecret appKey:(NSString *)appKey {
+#pragma mark - Configuration
+
++ (void)configureWithEnvironment:(USPAuthEnvironment)env
+                     consumerKey:(NSString *)consumerKey
+                  consumerSecret:(NSString *)consumerSecret
+                          appKey:(NSString *)appKey {
   USPAuthConfig *cfg = nil;
 
   switch (env) {
@@ -73,146 +95,114 @@
       break;
 
     case USPAuthEnvironmentCustom:
-    default: {
-      // Se quiser suportar custom aqui, defina uma baseURL via outra API sua,
-      // ou troque este bloco conforme sua necessidade:
-      NSString *baseURL = @""; // <- defina a URL custom se for usar este case
-      cfg = [USPAuthConfig customWithBaseURL:baseURL consumerKey:consumerKey consumerSecret:consumerSecret appKey:appKey];
-      break;
-    }
+    default:
+      NSAssert(NO, @"Use +configureWithConfig: para USPAuthEnvironmentCustom com baseURL explícita.");
+      return;
   }
 
-  [USPAuthService sharedService].config = cfg;
-
-  // compat opcional (se ainda houver código lendo appKey direto do service)
-  [USPAuthService sharedService].appKey = appKey;
+  [self configureWithConfig:cfg];
 }
 
-- (void)updateNotificationToken:(nullable NSString *)token {
-  // evita trabalho se não mudou
-  if ((token ?: @"").length == 0 && (self.notificationToken ?: @"").length == 0) return;
-  if (token && [token isEqualToString:self.notificationToken ?: @""]) return;
-
-  _notificationToken = [token copy];
-  if (token.length) {
-    [self.defaults setObject:token forKey:@"notificationToken"];
-  } else {
-    [self.defaults removeObjectForKey:@"notificationToken"];
-  }
-  [self.defaults synchronize];
-
-  // se já estiver logado e com userData, dispara o /registrar imediatamente
-  if ([self isLoggedIn]) {
-    [self registerTokenWithCompletion:^(NSError * _Nullable error) {
-      if (error) {
-        NSLog(@"[USPAuth] Falha ao registrar token de push após update: %@", error.localizedDescription);
-      } else {
-        NSLog(@"[USPAuth] Token de push registrado com sucesso após update.");
-      }
-    }];
-  } else {
-    NSLog(@"[USPAuth] Push token atualizado, registro será feito após login.");
-  }
++ (void)configureWithConfig:(USPAuthConfig *)config {
+  NSParameterAssert(config);
+  USPAuthService *service = [USPAuthService sharedService];
+  service.config = config;
+  service.appKey = config.appKey ?: @"";
 }
 
-- (NSDictionary<NSString*,id>*)userData {
-  NSData *data = [self.defaults objectForKey:@"userData"];
-  if (!data) return @{};
-  NSError *jsonError;
-  NSDictionary *parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
-  if (jsonError || ![parsed isKindOfClass:NSDictionary.class]) {
-    NSLog(@"Error parsing cached userData: %@", jsonError);
-    return @{};
-  }
-  return parsed;
+#pragma mark - State
+
+- (NSDictionary<NSString *,id> *)userData {
+  return self.sessionStore.userData ?: @{};
 }
 
 - (BOOL)isLoggedIn {
-  NSString *token  = [_defaults stringForKey:@"oauthToken"];
-  NSString *secret = [_defaults stringForKey:@"oauthTokenSecret"];
-  NSData   *data   = [_defaults objectForKey:@"userData"];
-  return (token.length > 0
-          && secret.length > 0
-          && data != nil
-          && data.length > 0);
+  return [self.sessionStore hasValidSession];
 }
 
-- (USPAuthUser *)currentUser {
-  NSData *data = [self.defaults objectForKey:@"userData"];
-  if (!data) return nil;
-  NSError *err;
-  NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:data options:0 error:&err];
-  if (err || ![dict isKindOfClass:[NSDictionary class]]) return nil;
-  return [[USPAuthUser alloc] initWithDictionary:dict];
+- (nullable USPAuthUser *)currentUser {
+  NSDictionary *data = self.sessionStore.userData;
+  if (data.count == 0) return nil;
+  return [[USPAuthUser alloc] initWithDictionary:data];
 }
+
+- (nullable NSString *)currentWSUserId {
+  id value = self.userData[@"wsuserid"];
+  return [value isKindOfClass:[NSString class]] ? value : nil;
+}
+
+#pragma mark - Login Flow
 
 - (void)ensureLoggedInFromViewController:(UIViewController *)fromVC
-                              completion:(void (^)(USPAuthUser * _Nullable user,
-                                                   NSError * _Nullable error))completion {
+                              completion:(void (^)(USPAuthUser * _Nullable, NSError * _Nullable))completion {
   NSParameterAssert(fromVC);
   NSParameterAssert(completion);
 
-  // 1. Evita login duplo
   if (self.isLoginPresentationInProgress) {
-    NSError *inProgressErr = [NSError errorWithDomain:NSStringFromClass(self.class)
-                                                 code:1001
-                                             userInfo:@{NSLocalizedDescriptionKey:@"Login já em andamento."}];
-    dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, inProgressErr); });
+    NSError *error = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                         code:USPAuthServiceErrorCodeLoginInProgress
+                                     userInfo:@{NSLocalizedDescriptionKey: @"Login já em andamento."}];
+    [self dispatchCompletionOnMain:^{ completion(nil, error); }];
     return;
   }
 
-  // 2. Cache rápido
-  if (self.oauthToken.length > 0 && self.userData.count > 0) {
-    USPAuthUser *cached = [[USPAuthUser alloc] initWithDictionary:self.userData];
-    dispatch_async(dispatch_get_main_queue(), ^{ completion(cached, nil); });
+  USPAuthUser *cached = [self currentUser];
+  if (self.oauthToken.length > 0 && self.oauthTokenSecret.length > 0 && cached) {
+    [self dispatchCompletionOnMain:^{ completion(cached, nil); }];
+    return;
+  }
+
+  if (!self.config) {
+    NSError *error = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                         code:USPAuthServiceErrorCodeMissingConfig
+                                     userInfo:@{NSLocalizedDescriptionKey: @"USPAuthService.config não foi configurado."}];
+    [self dispatchCompletionOnMain:^{ completion(nil, error); }];
     return;
   }
 
   self.isLoginPresentationInProgress = YES;
 
-  // 3. VC de login + barra “bonita”
   LoginWebViewController *loginVC = [[LoginWebViewController alloc] init];
+  __weak typeof(self) weakSelf = self;
   loginVC.loginCompletion = ^(BOOL success, NSError * _Nullable loginErr) {
-    __auto_type weakSelf = self;
     [fromVC dismissViewControllerAnimated:YES completion:^{
       __strong typeof(weakSelf) self = weakSelf;
       self.isLoginPresentationInProgress = NO;
 
-      if (!success) { completion(nil, loginErr); return; }
+      if (!success) {
+        completion(nil, loginErr);
+        return;
+      }
 
-      // Busca dados e registra token
-      [self fetchUserDataWithCompletion:^(NSDictionary *dict, NSError *fetchErr) {
-        if (fetchErr || dict.count == 0) {
-          NSError *err = fetchErr ?: [NSError errorWithDomain:NSStringFromClass(self.class)
-                                                         code:2
-                                                     userInfo:@{NSLocalizedDescriptionKey:@"Dados do usuário não encontrados."}];
-          completion(nil, err);
+      [self fetchUserDataWithCompletion:^(NSDictionary<NSString *,id> * _Nullable user, NSError * _Nullable fetchErr) {
+        if (fetchErr || user.count == 0) {
+          NSError *effectiveError = fetchErr ?: [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                                                     code:USPAuthServiceErrorCodeInvalidResponse
+                                                                 userInfo:@{NSLocalizedDescriptionKey: @"Dados do usuário não encontrados."}];
+          completion(nil, effectiveError);
           return;
         }
 
-        [self registerTokenWithCompletion:^(NSError *regErr) {
-          completion(regErr ? nil : [[USPAuthUser alloc] initWithDictionary:dict], regErr);
+        [self registerTokenWithCompletion:^(NSError * _Nullable registerError) {
+          completion(registerError ? nil : [[USPAuthUser alloc] initWithDictionary:user], registerError);
         }];
       }];
     }];
   };
 
-  // 4. NavigationController estilizado
   UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:loginVC];
-
   if (@available(iOS 13.0, *)) {
-    UINavigationBarAppearance *ap = [UINavigationBarAppearance new];
-    [ap configureWithOpaqueBackground];
-    ap.backgroundColor = [UIColor colorNamed:@"BrandPrimary"];   // cor do seu catálogo
-    ap.titleTextAttributes = @{ NSForegroundColorAttributeName : UIColor.whiteColor };
+    UINavigationBarAppearance *appearance = [UINavigationBarAppearance new];
+    [appearance configureWithOpaqueBackground];
+    appearance.backgroundColor = [UIColor colorNamed:@"BrandPrimary"] ?: UIColor.systemBlueColor;
+    appearance.titleTextAttributes = @{ NSForegroundColorAttributeName : UIColor.whiteColor };
 
-    nav.navigationBar.standardAppearance = ap;
-    nav.navigationBar.scrollEdgeAppearance = ap;
-    nav.navigationBar.compactAppearance  = ap;
-    nav.navigationBar.tintColor = UIColor.whiteColor;            // cor do botão “X”
+    nav.navigationBar.standardAppearance = appearance;
+    nav.navigationBar.scrollEdgeAppearance = appearance;
+    nav.navigationBar.compactAppearance = appearance;
+    nav.navigationBar.tintColor = UIColor.whiteColor;
   }
 
-  // 5. Sheet no iPad, fullscreen no iPhone
   if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
     nav.modalPresentationStyle = UIModalPresentationPageSheet;
     if (@available(iOS 15.0, *)) {
@@ -223,184 +213,352 @@
     nav.modalPresentationStyle = UIModalPresentationFullScreen;
   }
 
-  // 6. Apresentação
   dispatch_async(dispatch_get_main_queue(), ^{
     [fromVC presentViewController:nav animated:YES completion:nil];
   });
 }
-#pragma mark - Helpers
 
-- (void)fetchUserDataWithCompletion:(void(^)(NSDictionary<NSString*,id>* _Nullable user,
-                                             NSError * _Nullable error))completion {
+- (void)loginInWebView:(WKWebView *)webView
+            completion:(void (^)(BOOL, NSError * _Nullable))completion {
+  NSParameterAssert(webView);
   NSParameterAssert(completion);
-  if (!self.oauthToken || !self.oauthTokenSecret) {
-    NSError *e = [NSError errorWithDomain:@"USPAuthService"
-                                     code:1
-                                 userInfo:@{NSLocalizedDescriptionKey:@"Tokens OAuth não disponíveis para buscar dados do usuário."}];
-    dispatch_async(dispatch_get_main_queue(), ^{
-      completion(nil, e);
-    });
-    return;
-  }
-  
-  NSURLRequest *req = [OAuth1Controller preparedRequestForPath:@"/wsusuario/oauth/usuariousp"
-                                                    parameters:nil
-                                                    HTTPmethod:@"POST"
-                                                    oauthToken:self.oauthToken
-                                                   oauthSecret:self.oauthTokenSecret
-                                                        config:self.config];
-  if (!req) {
-    NSError *e = [NSError errorWithDomain:@"USPAuthService"
-                                     code:0
-                                 userInfo:@{NSLocalizedDescriptionKey:@"Não foi possível criar requisição para buscar dados do usuário."}];
-    dispatch_async(dispatch_get_main_queue(), ^{
-      completion(nil, e);
-    });
-    return;
-  }
-  
-  [[[NSURLSession sharedSession] dataTaskWithRequest:req
-                                   completionHandler:^(NSData * _Nullable data,
-                                                       NSURLResponse * _Nullable resp,
-                                                       NSError * _Nullable err) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      if (err) {
-        completion(nil, err);
-        return;
-      }
-      if (!data) {
-        NSError *e = [NSError errorWithDomain:NSStringFromClass([self class])
-                                         code:3
-                                     userInfo:@{NSLocalizedDescriptionKey:@"Nenhum dado recebido do servidor."}];
-        completion(nil, e);
-        return;
-      }
-      
-      NSError *jsonErr;
-      NSDictionary *user = [NSJSONSerialization JSONObjectWithData:data
-                                                           options:0
-                                                             error:&jsonErr];
-      if (jsonErr || ![user isKindOfClass:NSDictionary.class] || user.count == 0) {
-        NSError *e = jsonErr ?: [NSError errorWithDomain:NSStringFromClass([self class])
-                                                    code:4
-                                                userInfo:@{NSLocalizedDescriptionKey:@"Resposta inválida do servidor ao buscar dados do usuário ou dados vazios."}];
-        completion(nil, e);
-        return;
-      }
-      
-      [self.defaults setObject:data forKey:@"userData"];
-      [self.defaults synchronize];
-      completion(user, nil);
-    });
-  }] resume];
-}
 
-- (void)registerTokenWithCompletion:(void(^)(NSError * _Nullable error))completion {
-  NSParameterAssert(completion);
-  
-  NSString *wsUserId = self.userData[@"wsuserid"];
-  NSLog(@"[USPAuth] Iniciando registro de token. wsUserId: %@", wsUserId);
-
-  if (!wsUserId.length) {
-    NSError *e = [NSError errorWithDomain:@"USPAuthService"
-                                     code:5
-                                 userInfo:@{NSLocalizedDescriptionKey:@"ID do usuário (wsuserid) não encontrado para registrar o token."}];
-    NSLog(@"[USPAuth] ERRO: wsUserId não encontrado. Abortando registro.");
-    dispatch_async(dispatch_get_main_queue(), ^{
-      completion(e);
-    });
+  if (!self.config) {
+    NSError *error = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                         code:USPAuthServiceErrorCodeMissingConfig
+                                     userInfo:@{NSLocalizedDescriptionKey: @"USPAuthService.config não foi configurado."}];
+    [self dispatchCompletionOnMain:^{ completion(NO, error); }];
     return;
   }
 
-  NSString *baseURL =self.config.baseURL;
-  NSURL *url = [NSURL URLWithString:[baseURL stringByAppendingString:@"/mobile/servicos/oauth/registrar"]];
-  NSString *appKey = self.config ? self.config.appKey : self.appKey ?: @"";
-  NSString *notif = self.notificationToken ?: @"";
-  NSString *platform = self.notificationPlatform.length ? self.notificationPlatform : @"F";
-  NSString *amb = @"I";
+  self.activeOAuthController = [[OAuth1Controller alloc] initWithConfig:self.config];
+  __weak typeof(self) weakSelf = self;
+  [self.activeOAuthController loginWithWebView:webView completion:^(NSDictionary<NSString *,NSString *> * _Nullable accessParams, NSError * _Nullable error) {
+    __strong typeof(weakSelf) self = weakSelf;
+    self.activeOAuthController = nil;
 
-  NSDictionary *body = @{
-    @"token": wsUserId,
-    @"tokenNotificacao": notif,
-    @"app": appKey,
-    @"ambiente": amb,
-    @"plataformaNotificacao": platform
-  };
-  
-  NSLog(@"[USPAuth] Enviando POST para %@ com body: %@", url, body);
-  
-  [[HTTPClient sharedClient] postJSON:body toURL:url completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable resp, NSError * _Nullable err) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      if (data) {
-        NSString *responseString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        NSLog(@"[USPAuth] Resposta do servidor: %@", responseString ?: @"(resposta vazia ou inválida)");
-      }
+    if (error || accessParams.count == 0) {
+      completion(NO, error);
+      return;
+    }
 
-      if (err || resp.statusCode != 200) {
-        NSString *msg = err ? err.localizedDescription : [NSString stringWithFormat:@"Status: %ld", (long)resp.statusCode];
-        NSLog(@"[USPAuth] ERRO ao registrar token: %@", msg);
-
-        NSError *effectiveError = err ?: [NSError errorWithDomain:@"USPAuthService"
-                                                             code:resp.statusCode
-                                                         userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Falha ao registrar token. Status: %ld", (long)resp.statusCode]}];
-        completion(effectiveError);
-        return;
-      }
-
-      NSLog(@"[USPAuth] Token registrado com sucesso.");
-      [self.defaults setBool:YES forKey:@"isRegistered"];
-      [self.defaults synchronize];
-      completion(nil);
-    });
+    self.oauthToken = accessParams[@"oauth_token"];
+    self.oauthTokenSecret = accessParams[@"oauth_token_secret"];
+    completion(YES, nil);
   }];
 }
 
+#pragma mark - Push Token
 
-#pragma mark - Propriedades set (OAuthToken and Secret)
+- (void)updateNotificationToken:(nullable NSString *)token {
+  NSString *newToken = token ?: @"";
+  NSString *currentToken = self.notificationToken ?: @"";
+  if ([newToken isEqualToString:currentToken]) {
+    return;
+  }
+
+  self.notificationToken = token;
+
+  if ([self isLoggedIn]) {
+    [self registerTokenWithCompletion:^(NSError * _Nullable error) {
+      if (error) {
+        NSLog(@"[USPAuth] Falha ao registrar token de push após update: %@", error.localizedDescription);
+      }
+    }];
+  }
+}
+
+#pragma mark - Backend Operations
+
+- (void)registerToken {
+  [self registerTokenWithCompletion:^(NSError * _Nullable error) {
+    if (error) {
+      NSLog(@"[USPAuth] Falha ao registrar token: %@", error.localizedDescription);
+    }
+  }];
+}
+
+- (void)registerTokenWithCompletion:(void (^)(NSError * _Nullable))completion {
+  NSParameterAssert(completion);
+
+  NSString *wsUserId = [self currentWSUserId];
+  if (wsUserId.length == 0) {
+    NSError *error = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                         code:USPAuthServiceErrorCodeMissingWSUserId
+                                     userInfo:@{NSLocalizedDescriptionKey: @"ID do usuário (wsuserid) não encontrado."}];
+    [self dispatchCompletionOnMain:^{ completion(error); }];
+    return;
+  }
+
+  NSDictionary *body = [self registrationPayloadWithWSUserId:wsUserId];
+  [self postBody:body
+       toAPIPath:kRegisterPath
+      completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable response, NSError * _Nullable error) {
+    if (error) {
+      completion(error);
+      return;
+    }
+
+    self.sessionStore.isRegistered = YES;
+    completion(nil);
+  }];
+}
+
+- (void)invalidateToken {
+  [self invalidateTokenWithCompletion:^(NSError * _Nullable error) {
+    if (error) {
+      NSLog(@"[USPAuth] Falha ao invalidar token: %@", error.localizedDescription);
+    }
+  }];
+}
+
+- (void)invalidateTokenWithCompletion:(void (^)(NSError * _Nullable))completion {
+  NSParameterAssert(completion);
+
+  NSString *wsUserId = [self currentWSUserId];
+  if (wsUserId.length == 0) {
+    NSError *error = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                         code:USPAuthServiceErrorCodeMissingWSUserId
+                                     userInfo:@{NSLocalizedDescriptionKey: @"ID do usuário (wsuserid) não encontrado."}];
+    [self dispatchCompletionOnMain:^{ completion(error); }];
+    return;
+  }
+
+  NSDictionary *body = @{ @"token": wsUserId, @"app": [self effectiveAppKey] };
+  [self postBody:body
+       toAPIPath:kInvalidatePath
+      completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable response, NSError * _Nullable error) {
+    completion(error);
+  }];
+}
+
+- (void)checkToken {
+  [self checkTokenWithCompletion:^(NSDictionary<NSString *,id> * _Nullable payload, NSError * _Nullable error) {
+    if (error) {
+      NSLog(@"[USPAuth] Falha ao consultar token: %@", error.localizedDescription);
+    }
+  }];
+}
+
+- (void)checkTokenWithCompletion:(void (^)(NSDictionary<NSString *,id> * _Nullable, NSError * _Nullable))completion {
+  NSParameterAssert(completion);
+
+  NSString *wsUserId = [self currentWSUserId];
+  if (wsUserId.length == 0) {
+    NSError *error = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                         code:USPAuthServiceErrorCodeMissingWSUserId
+                                     userInfo:@{NSLocalizedDescriptionKey: @"ID do usuário (wsuserid) não encontrado."}];
+    [self dispatchCompletionOnMain:^{ completion(nil, error); }];
+    return;
+  }
+
+  NSDictionary *body = @{ @"token": wsUserId, @"app": [self effectiveAppKey] };
+  [self postBody:body
+       toAPIPath:kCheckPath
+      completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable response, NSError * _Nullable error) {
+    if (error) {
+      completion(nil, error);
+      return;
+    }
+
+    if (data.length == 0) {
+      completion(@{}, nil);
+      return;
+    }
+
+    NSError *jsonError = nil;
+    NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+    if (jsonError || ![payload isKindOfClass:[NSDictionary class]]) {
+      NSError *invalidError = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                                  code:USPAuthServiceErrorCodeInvalidResponse
+                                              userInfo:@{NSLocalizedDescriptionKey: @"Resposta inválida ao consultar token."}];
+      completion(nil, invalidError);
+      return;
+    }
+
+    completion(payload, nil);
+  }];
+}
+
+- (void)logout {
+  self.oauthToken = nil;
+  self.oauthTokenSecret = nil;
+  self.notificationToken = nil;
+  self.notificationPlatform = @"F";
+  [self.sessionStore clearAll];
+}
+
+#pragma mark - OAuth Tokens
 
 - (void)setOauthToken:(NSString *)oauthToken {
   _oauthToken = [oauthToken copy];
-  if (_oauthToken) {
-    [self.defaults setObject:_oauthToken forKey:@"oauthToken"];
-  } else {
-    [self.defaults removeObjectForKey:@"oauthToken"];
-  }
-  [self.defaults synchronize];
+  self.sessionStore.oauthToken = oauthToken;
 }
 
 - (NSString *)oauthToken {
-  if (!_oauthToken) {
-    _oauthToken = [self.defaults stringForKey:@"oauthToken"];
+  if (_oauthToken.length == 0) {
+    _oauthToken = [self.sessionStore.oauthToken copy];
   }
   return _oauthToken;
 }
 
 - (void)setOauthTokenSecret:(NSString *)oauthTokenSecret {
   _oauthTokenSecret = [oauthTokenSecret copy];
-  if (_oauthTokenSecret) {
-    [self.defaults setObject:_oauthTokenSecret forKey:@"oauthTokenSecret"];
-  } else {
-    [self.defaults removeObjectForKey:@"oauthTokenSecret"];
-  }
-  [self.defaults synchronize];
+  self.sessionStore.oauthTokenSecret = oauthTokenSecret;
 }
 
 - (NSString *)oauthTokenSecret {
-  if (!_oauthTokenSecret) {
-    _oauthTokenSecret = [self.defaults stringForKey:@"oauthTokenSecret"];
+  if (_oauthTokenSecret.length == 0) {
+    _oauthTokenSecret = [self.sessionStore.oauthTokenSecret copy];
   }
   return _oauthTokenSecret;
 }
 
-- (void)logout {
-  self.oauthToken = nil;
-  self.oauthTokenSecret = nil;
-  [self.defaults removeObjectForKey:@"userData"];
-  [self.defaults removeObjectForKey:@"isRegistered"];
-  [self.defaults removeObjectForKey:@"notificationToken"];
-  [self.defaults removeObjectForKey:@"notificationPlatform"];
-  [self.defaults synchronize];
-  NSLog(@"User session cleared.");
+- (void)setNotificationToken:(NSString *)notificationToken {
+  _notificationToken = [notificationToken copy];
+  self.sessionStore.notificationToken = notificationToken;
+}
+
+- (void)setNotificationPlatform:(NSString *)notificationPlatform {
+  _notificationPlatform = notificationPlatform.length > 0 ? [notificationPlatform copy] : @"F";
+  self.sessionStore.notificationPlatform = _notificationPlatform;
+}
+
+#pragma mark - Helpers
+
+- (void)fetchUserDataWithCompletion:(void (^)(NSDictionary<NSString *,id> * _Nullable, NSError * _Nullable))completion {
+  NSParameterAssert(completion);
+
+  if (!self.config) {
+    NSError *error = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                         code:USPAuthServiceErrorCodeMissingConfig
+                                     userInfo:@{NSLocalizedDescriptionKey: @"USPAuthService.config não foi configurado."}];
+    [self dispatchCompletionOnMain:^{ completion(nil, error); }];
+    return;
+  }
+
+  if (self.oauthToken.length == 0 || self.oauthTokenSecret.length == 0) {
+    NSError *error = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                         code:USPAuthServiceErrorCodeMissingOAuthTokens
+                                     userInfo:@{NSLocalizedDescriptionKey: @"Tokens OAuth não disponíveis para buscar dados do usuário."}];
+    [self dispatchCompletionOnMain:^{ completion(nil, error); }];
+    return;
+  }
+
+  NSURLRequest *request = [OAuth1Controller preparedRequestForPath:kUserInfoPath
+                                                        parameters:nil
+                                                        HTTPmethod:@"POST"
+                                                        oauthToken:self.oauthToken
+                                                       oauthSecret:self.oauthTokenSecret
+                                                            config:self.config];
+  if (!request) {
+    NSError *error = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                         code:USPAuthServiceErrorCodeInvalidRequest
+                                     userInfo:@{NSLocalizedDescriptionKey: @"Não foi possível montar a requisição de dados do usuário."}];
+    [self dispatchCompletionOnMain:^{ completion(nil, error); }];
+    return;
+  }
+
+  [[self.urlSession dataTaskWithRequest:request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+    [self dispatchCompletionOnMain:^{
+      if (error) {
+        completion(nil, error);
+        return;
+      }
+
+      if (data.length == 0) {
+        NSError *emptyError = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                                  code:USPAuthServiceErrorCodeEmptyResponse
+                                              userInfo:@{NSLocalizedDescriptionKey: @"Nenhum dado recebido do servidor."}];
+        completion(nil, emptyError);
+        return;
+      }
+
+      NSError *jsonError = nil;
+      NSDictionary *user = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+      if (jsonError || ![user isKindOfClass:[NSDictionary class]] || user.count == 0) {
+        NSError *invalidError = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                                    code:USPAuthServiceErrorCodeInvalidResponse
+                                                userInfo:@{NSLocalizedDescriptionKey: @"Resposta inválida ao buscar dados do usuário."}];
+        completion(nil, invalidError);
+        return;
+      }
+
+      self.sessionStore.userData = user;
+      completion(user, nil);
+    }];
+  }] resume];
+}
+
+- (NSDictionary<NSString *, id> *)registrationPayloadWithWSUserId:(NSString *)wsUserId {
+  return @{
+    @"token": wsUserId,
+    @"tokenNotificacao": self.notificationToken ?: @"",
+    @"app": [self effectiveAppKey],
+    @"ambiente": @"I",
+    @"plataformaNotificacao": self.notificationPlatform.length > 0 ? self.notificationPlatform : @"F"
+  };
+}
+
+- (NSString *)effectiveAppKey {
+  NSString *value = self.config.appKey.length > 0 ? self.config.appKey : self.appKey;
+  return value ?: @"";
+}
+
+- (void)postBody:(NSDictionary *)body
+       toAPIPath:(NSString *)path
+      completion:(void (^)(NSData * _Nullable data,
+                           NSHTTPURLResponse * _Nullable response,
+                           NSError * _Nullable error))completion {
+  NSURL *url = [self URLWithAPIPath:path];
+  if (!url) {
+    NSError *error = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                         code:USPAuthServiceErrorCodeInvalidURL
+                                     userInfo:@{NSLocalizedDescriptionKey: @"Base URL inválida na configuração."}];
+    [self dispatchCompletionOnMain:^{ completion(nil, nil, error); }];
+    return;
+  }
+
+  NSDictionary *headers = self.backendHeaderValue.length > 0
+  ? @{ kBackendHeaderName: self.backendHeaderValue }
+  : @{};
+  [self.httpClient postJSON:body toURL:url headers:headers completion:^(NSData * _Nullable data, NSHTTPURLResponse * _Nullable response, NSError * _Nullable error) {
+    [self dispatchCompletionOnMain:^{
+      if (error) {
+        completion(data, response, error);
+        return;
+      }
+
+      NSInteger statusCode = response.statusCode;
+      if (statusCode < 200 || statusCode >= 300) {
+        NSError *statusError = [NSError errorWithDomain:kUSPAuthServiceErrorDomain
+                                                   code:statusCode
+                                               userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Falha na chamada %@ (status %ld).", path, (long)statusCode]}];
+        completion(data, response, statusError);
+        return;
+      }
+
+      completion(data, response, nil);
+    }];
+  }];
+}
+
+- (NSURL *)URLWithAPIPath:(NSString *)path {
+  if (self.config.baseURL.length == 0 || path.length == 0) {
+    return nil;
+  }
+
+  NSString *fullPath = [self.config.baseURL stringByAppendingString:path];
+  return [NSURL URLWithString:fullPath];
+}
+
+- (void)dispatchCompletionOnMain:(dispatch_block_t)block {
+  if (!block) return;
+  if ([NSThread isMainThread]) {
+    block();
+  } else {
+    dispatch_async(dispatch_get_main_queue(), block);
+  }
 }
 
 @end

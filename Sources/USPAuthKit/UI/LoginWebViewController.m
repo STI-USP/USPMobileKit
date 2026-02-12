@@ -7,7 +7,6 @@
 #if __has_include(<UIKit/UIKit.h>)
 
 #import "LoginWebViewController.h"
-#import "OAuth1Controller.h"
 #import "USPAuthService.h"
 #import <WebKit/WebKit.h>
 #import "USPAuthConfig.h"
@@ -17,9 +16,7 @@
 @property (nonatomic, strong) UIProgressView *progressView;
 @end
 
-@implementation LoginWebViewController {
-  OAuth1Controller *_oauthController;
-}
+@implementation LoginWebViewController
 
 #pragma mark - Init
 - (instancetype)init {
@@ -27,7 +24,6 @@
     USPAuthConfig *cfg = [USPAuthService sharedService].config;
     // Caso a config não esteja setada, é melhor falhar cedo para evitar login sem baseURL/keys
     NSAssert(cfg != nil, @"USPAuthService.config não configurado. Defina a config (baseURL/keys/appKey) antes do login.");
-    _oauthController = [[OAuth1Controller alloc] initWithConfig:cfg];
   }
   return self;
 }
@@ -123,7 +119,7 @@
   }
 
   __weak typeof(self) weakSelf = self;
-  [_oauthController loginWithWebView:self.webView completion:^(NSDictionary<NSString *,NSString *> * _Nullable tokens, NSError * _Nullable error) {
+  [[USPAuthService sharedService] loginInWebView:self.webView completion:^(BOOL success, NSError * _Nullable error) {
     __strong typeof(weakSelf) self = weakSelf;
     if (error) {
       if (self.loginCompletion)
@@ -131,12 +127,8 @@
       return;
     }
 
-    USPAuthService *svc = [USPAuthService sharedService];
-    svc.oauthToken = tokens[@"oauth_token"];
-    svc.oauthTokenSecret = tokens[@"oauth_token_secret"];
-
     if (self.loginCompletion)
-      self.loginCompletion(YES, nil);
+      self.loginCompletion(success, nil);
   }];
 }
 

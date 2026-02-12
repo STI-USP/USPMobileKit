@@ -10,13 +10,9 @@
 @implementation NSString (URLEncoding)
 
 - (NSString *)utf8AndURLEncode {
-    return (NSString *)CFBridgingRelease(
-        CFURLCreateStringByAddingPercentEscapes(NULL,
-            (CFStringRef)self,
-            NULL,
-            (CFStringRef)@"!*'\"();:@&=+$,/?%#[]% ",
-            kCFStringEncodingUTF8)
-    );
+    NSMutableCharacterSet *allowed = [[NSCharacterSet URLQueryAllowedCharacterSet] mutableCopy];
+    [allowed removeCharactersInString:@"!*'\"();:@&=+$,/?%#[]% "];
+    return [self stringByAddingPercentEncodingWithAllowedCharacters:allowed] ?: @"";
 }
 
 + (NSString *)getNonce {

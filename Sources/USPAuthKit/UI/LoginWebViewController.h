@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// VC que apresenta o fluxo de OAuth 1.0 em WKWebView
 @interface LoginWebViewController : UIViewController
 
-/// Bloco para chamar quando terminar todo o fluxo (login, fetch, register)
+/// Bloco chamado ao concluir o login OAuth no webview.
 @property (nonatomic, copy) void (^loginCompletion)(BOOL success, NSError * _Nullable error);
 
 /// Descarta a webview e limpa delegates

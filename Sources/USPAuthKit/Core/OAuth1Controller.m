@@ -4,9 +4,6 @@
 // Adapted by Vagner Machado on 22/05/25.
 //
 
-#if __has_include(<UIKit/UIKit.h>)
-@import UIKit; // UIActivityIndicatorView
-#endif
 @import WebKit;
 
 #import "OAuth1Controller.h"
@@ -31,15 +28,16 @@
 // -----------------------------------------------------------------------------
 
 static NSString * CHPercentEscapedQueryStringPairMemberFromStringWithEncoding(NSString *string, NSStringEncoding encoding) {
-  static NSString * const kCHCharactersToBeEscaped = @":/?&=;+!@#$()~";
-  static NSString * const kCHCharactersToLeaveUnescaped = @"[].";
-  return (__bridge_transfer NSString *)CFURLCreateStringByAddingPercentEscapes(
-                                                                               kCFAllocatorDefault,
-                                                                               (__bridge CFStringRef)string,
-                                                                               (__bridge CFStringRef)kCHCharactersToLeaveUnescaped,
-                                                                               (__bridge CFStringRef)kCHCharactersToBeEscaped,
-                                                                               CFStringConvertNSStringEncodingToEncoding(encoding)
-                                                                               );
+  (void)encoding;
+  if (string.length == 0) return @"";
+  static NSCharacterSet *allowedCharacterSet;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    NSMutableCharacterSet *mutableSet = [[NSCharacterSet URLQueryAllowedCharacterSet] mutableCopy];
+    [mutableSet removeCharactersInString:@":/?&=;+!@#$()~"];
+    allowedCharacterSet = [mutableSet copy];
+  });
+  return [string stringByAddingPercentEncodingWithAllowedCharacters:allowedCharacterSet] ?: @"";
 }
 
 @interface CHQueryStringPair : NSObject
@@ -130,7 +128,6 @@ typedef void (^WebViewHandler)(NSDictionary *oauthParams);
 
 @interface OAuth1Controller ()
 @property (nonatomic, weak)   WKWebView *webView;
-@property (nonatomic, strong) UIActivityIndicatorView *loadingIndicator;
 @property (nonatomic, copy)   WebViewHandler delegateHandler;
 @property (nonatomic, strong, readonly) USPAuthConfig *config;
 @end
@@ -157,12 +154,6 @@ typedef void (^WebViewHandler)(NSDictionary *oauthParams);
   
   self.webView = webView;
   webView.navigationDelegate = self;
-  
-  // spinner
-  self.loadingIndicator = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
-  self.loadingIndicator.center = webView.center;
-  [webView addSubview:self.loadingIndicator];
-  [self.loadingIndicator startAnimating];
   
   // Step 1: request token
   __weak typeof(self) wself = self;
@@ -238,20 +229,15 @@ typedef void (^WebViewHandler)(NSDictionary *oauthParams);
   NSString *url = [NSString stringWithFormat:@"%@%@?oauth_token=%@&oauth_callback=%@",
                    self.config.baseURL, AUTHENTICATE_URL, oauthToken, cb];
   
-  __weak typeof(self) wself = self;
   self.delegateHandler = ^(NSDictionary *params) {
     if (!params[@"oauth_verifier"]) {
       NSError *e = [NSError errorWithDomain:@"oauth"
-                                       code:0
+                                      code:0
                                    userInfo:@{NSLocalizedDescriptionKey:@"Verifier ausente."}];
       completion(e, params);
     } else {
       completion(nil, params);
     }
-    // remove spinner se ainda estiver
-    __strong typeof(wself) selfStrong = wself;
-    [selfStrong.loadingIndicator removeFromSuperview];
-    selfStrong.loadingIndicator = nil;
   };
   
   dispatch_async(dispatch_get_main_queue(), ^{
@@ -371,8 +357,8 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler
 }
 
 - (void)webView:(WKWebView*)webView didFinishNavigation:(WKNavigation*)nav {
-  [self.loadingIndicator removeFromSuperview];
-  self.loadingIndicator = nil;
+  (void)webView;
+  (void)nav;
 }
 
 // -----------------------------------------------------------------------------
