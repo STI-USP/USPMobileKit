@@ -12,7 +12,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface MyMutableURLRequest : NSMutableURLRequest
+@interface USPAuthKitMutableURLRequest : NSMutableURLRequest
 
 + (NSMutableURLRequest *)requestWithURL:(NSURL *)URL;
 
