@@ -4,9 +4,6 @@
 // Adapted by Vagner Machado on 22/05/25.
 //
 
-#if __has_include(<UIKit/UIKit.h>)
-@import UIKit; // UIActivityIndicatorView
-#endif
 @import WebKit;
 
 #import "OAuth1Controller.h"
@@ -31,15 +28,16 @@
 // -----------------------------------------------------------------------------
 
 static NSString * CHPercentEscapedQueryStringPairMemberFromStringWithEncoding(NSString *string, NSStringEncoding encoding) {
-  static NSString * const kCHCharactersToBeEscaped = @":/?&=;+!@#$()~";
-  static NSString * const kCHCharactersToLeaveUnescaped = @"[].";
-  return (__bridge_transfer NSString *)CFURLCreateStringByAddingPercentEscapes(
-                                                                               kCFAllocatorDefault,
-                                                                               (__bridge CFStringRef)string,
-                                                                               (__bridge CFStringRef)kCHCharactersToLeaveUnescaped,
-                                                                               (__bridge CFStringRef)kCHCharactersToBeEscaped,
-                                                                               CFStringConvertNSStringEncodingToEncoding(encoding)
-                                                                               );
+  (void)encoding;
+  if (string.length == 0) return @"";
+  static NSCharacterSet *allowedCharacterSet;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    NSMutableCharacterSet *mutableSet = [[NSCharacterSet URLQueryAllowedCharacterSet] mutableCopy];
+    [mutableSet removeCharactersInString:@":/?&=;+!@#$()~"];
+    allowedCharacterSet = [mutableSet copy];
+  });
+  return [string stringByAddingPercentEncodingWithAllowedCharacters:allowedCharacterSet] ?: @"";
 }
 
 @interface CHQueryStringPair : NSObject
@@ -104,24 +102,6 @@ static NSString * CHQueryStringFromParametersWithEncoding(NSDictionary *paramete
   return [pairs componentsJoinedByString:@"&"];
 }
 
-static inline NSDictionary * CHParametersFromQueryString(NSString *qs) {
-  NSMutableDictionary *params = [NSMutableDictionary dictionary];
-  NSScanner *scanner = [NSScanner scannerWithString:qs];
-  NSString *name, *value;
-  while (![scanner isAtEnd]) {
-    name = nil; [scanner scanUpToString:@"=" intoString:&name];
-    [scanner scanString:@"=" intoString:NULL];
-    value = nil; [scanner scanUpToString:@"&" intoString:&value];
-    [scanner scanString:@"&" intoString:NULL];
-    if (name && value) {
-      NSString *decodedName  = [name stringByRemovingPercentEncoding];
-      NSString *decodedValue = [value stringByRemovingPercentEncoding];
-      if (decodedName && decodedValue) params[decodedName] = decodedValue;
-    }
-  }
-  return params;
-}
-
 // -----------------------------------------------------------------------------
 // Interface privada
 // -----------------------------------------------------------------------------
@@ -130,7 +110,6 @@ typedef void (^WebViewHandler)(NSDictionary *oauthParams);
 
 @interface OAuth1Controller ()
 @property (nonatomic, weak)   WKWebView *webView;
-@property (nonatomic, strong) UIActivityIndicatorView *loadingIndicator;
 @property (nonatomic, copy)   WebViewHandler delegateHandler;
 @property (nonatomic, strong, readonly) USPAuthConfig *config;
 @end
@@ -157,12 +136,6 @@ typedef void (^WebViewHandler)(NSDictionary *oauthParams);
   
   self.webView = webView;
   webView.navigationDelegate = self;
-  
-  // spinner
-  self.loadingIndicator = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
-  self.loadingIndicator.center = webView.center;
-  [webView addSubview:self.loadingIndicator];
-  [self.loadingIndicator startAnimating];
   
   // Step 1: request token
   __weak typeof(self) wself = self;
@@ -225,7 +198,7 @@ typedef void (^WebViewHandler)(NSDictionary *oauthParams);
     completionHandler:^(NSData *data, NSURLResponse *r, NSError *err) {
     if (err) { dispatch_async(dispatch_get_main_queue(), ^{ completion(err, nil); }); return; }
     NSString *resp = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"";
-    NSDictionary *parsed = CHParametersFromQueryString(resp ?: @"");
+    NSDictionary *parsed = [self.class parametersFromQueryString:resp ?: @""];
     dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, parsed); });
   }] resume];
 }
@@ -238,20 +211,15 @@ typedef void (^WebViewHandler)(NSDictionary *oauthParams);
   NSString *url = [NSString stringWithFormat:@"%@%@?oauth_token=%@&oauth_callback=%@",
                    self.config.baseURL, AUTHENTICATE_URL, oauthToken, cb];
   
-  __weak typeof(self) wself = self;
   self.delegateHandler = ^(NSDictionary *params) {
     if (!params[@"oauth_verifier"]) {
       NSError *e = [NSError errorWithDomain:@"oauth"
-                                       code:0
+                                      code:0
                                    userInfo:@{NSLocalizedDescriptionKey:@"Verifier ausente."}];
       completion(e, params);
     } else {
       completion(nil, params);
     }
-    // remove spinner se ainda estiver
-    __strong typeof(wself) selfStrong = wself;
-    [selfStrong.loadingIndicator removeFromSuperview];
-    selfStrong.loadingIndicator = nil;
   };
   
   dispatch_async(dispatch_get_main_queue(), ^{
@@ -286,7 +254,7 @@ typedef void (^WebViewHandler)(NSDictionary *oauthParams);
     completionHandler:^(NSData *data, NSURLResponse *r, NSError *err) {
     if (err) { dispatch_async(dispatch_get_main_queue(), ^{ completion(err, nil); }); return; }
     NSString *resp = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"";
-    NSDictionary *parsed = CHParametersFromQueryString(resp ?: @"");
+    NSDictionary *parsed = [self.class parametersFromQueryString:resp ?: @""];
     dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, parsed); });
   }] resume];
 }
@@ -350,7 +318,7 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler
   NSRange range = [url rangeOfString:@"oauth_verifier="];
   if (range.location != NSNotFound) {
     NSString *query = [[url componentsSeparatedByString:@"?"] lastObject] ?: @"";
-    NSDictionary *paramsIn = CHParametersFromQueryString(query);
+    NSDictionary *paramsIn = [self.class parametersFromQueryString:query];
     
     // Remove sufixo "#_=_"
     NSMutableDictionary *params = [paramsIn mutableCopy];
@@ -371,13 +339,30 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler
 }
 
 - (void)webView:(WKWebView*)webView didFinishNavigation:(WKNavigation*)nav {
-  [self.loadingIndicator removeFromSuperview];
-  self.loadingIndicator = nil;
+  (void)webView;
+  (void)nav;
 }
 
 // -----------------------------------------------------------------------------
 // Helpers OAuth
 // -----------------------------------------------------------------------------
+
++ (NSDictionary<NSString *, NSString *> *)parametersFromQueryString:(NSString *)queryString {
+  if (queryString.length == 0) return @{};
+
+  NSString *normalizedQuery = [queryString hasPrefix:@"?"] ? [queryString substringFromIndex:1] : queryString;
+  NSURLComponents *components = [NSURLComponents componentsWithString:[NSString stringWithFormat:@"https://localhost/?%@", normalizedQuery]];
+  if (!components) return @{};
+
+  NSMutableDictionary<NSString *, NSString *> *params = [NSMutableDictionary dictionary];
+  for (NSURLQueryItem *item in components.queryItems) {
+    if (item.name.length == 0 || item.value == nil) {
+      continue;
+    }
+    params[item.name] = item.value;
+  }
+  return params;
+}
 
 + (NSMutableDictionary*)standardOauthParametersWithConsumerKey:(NSString*)consumerKey {
   return [@{

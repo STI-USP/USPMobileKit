@@ -14,12 +14,23 @@ NS_ASSUME_NONNULL_BEGIN
 /// Singleton
 + (instancetype)sharedClient;
 
+- (instancetype)initWithSession:(NSURLSession *)session NS_DESIGNATED_INITIALIZER;
+- (instancetype)init;
+
 /// Envia um dicionário como JSON via POST
 - (void)postJSON:(NSDictionary *)body
             toURL:(NSURL *)url
        completion:(void (^)(NSData * _Nullable data,
                             NSHTTPURLResponse * _Nullable response,
                             NSError * _Nullable error))handler;
+
+/// Envia um dicionário como JSON via POST com cabeçalhos adicionais.
+- (void)postJSON:(NSDictionary *)body
+           toURL:(NSURL *)url
+         headers:(nullable NSDictionary<NSString *, NSString *> *)headers
+      completion:(void (^)(NSData * _Nullable data,
+                           NSHTTPURLResponse * _Nullable response,
+                           NSError * _Nullable error))handler;
 
 @end
 

@@ -1,59 +1,93 @@
 # USPAuthKit
 
-`USPAuthKit` é um package Swift (SPM) desenvolvido em Objective-C para facilitar a autenticação de utilizadores em aplicações iOS com os serviços da USP que utilizam o protocolo OAuth 1.0a.
+`USPAuthKit` é um package SPM (Objective-C) para autenticação interna via OAuth 1.0a + pós-processamento de usuário USP.
 
-## Visão Geral
+## O que este kit faz
 
-Este package encapsula todo o fluxo de autenticação OAuth 1.0a, incluindo:
+Este projeto **não implementa apenas OAuth puro**. O fluxo completo é:
 
-* Apresentação de uma interface web (WKWebView) para o utilizador inserir as suas credenciais da USP.
-* Obtenção e gestão segura de tokens OAuth (request token e access token).
-* Armazenamento persistente dos tokens de acesso e dados do utilizador em `NSUserDefaults`.
-* Recuperação automática da sessão do utilizador a partir do cache, se disponível.
-* Um método simplificado para garantir que o utilizador está logado antes de aceder a recursos protegidos.
-* Busca de informações básicas do utilizador após a autenticação.
-* Registo do token do utilizador num backend (opcional, conforme a implementação do `registerTokenWithCompletion:`).
+1. Executa OAuth 1.0a (`request_token` -> `authorize` -> `access_token`).
+2. Faz `POST /wsusuario/oauth/usuariousp` para obter dados de usuário.
+3. Monta e cacheia `USPAuthUser`.
+4. Usa `wsuserid` para registrar token no backend (`/mobile/servicos/oauth/registrar`).
 
-## Funcionalidades
-
-* **Fluxo OAuth 1.0a Completo:** Implementa os três passos do OAuth 1.0a.
-* **Interface de Login Integrada:** Utiliza `WKWebView` para apresentar a página de login da USP de forma segura.
-* **Gestão de Tokens:** Salva e recupera `oauth_token` e `oauth_token_secret`.
-* **Cache de Sessão:** Verifica se o utilizador já está logado e recupera os dados da sessão.
-* **Interface Simples:** Um único método principal para iniciar o fluxo de login e obter os dados do utilizador.
-* **Construído para SPM:** Facilmente integrável em projetos iOS modernos.
+Nos apps clientes, o identificador para chamadas internas deve ser o `wsuserid` (token funcional de autorização interna), e não um id de usuário de domínio próprio.
 
 ## Requisitos
 
-* iOS 13.0 ou superior (devido ao uso de `WKWebView` e práticas modernas de UI)
-* Xcode 12.0 ou superior
-* Conhecimento básico de Objective-C para integração (embora possa ser usado a partir de Swift também).
+- iOS 12+
+- Xcode com suporte a Swift Package Manager
 
 ## Instalação
 
-### Swift Package Manager (SPM)
+Adicione o repositório em `File > Add Packages...` no Xcode e selecione o target do app.
 
-Pode adicionar o `USPAuthKit` ao seu projeto Xcode seguindo estes passos:
+## Integração rápida (Swift)
 
-1.  No Xcode, abra o seu projeto.
-2.  Vá a `File` > `Add Packages...`
-3.  Na barra de pesquisa no canto superior direito, cole a URL do repositório Git deste package.
-4.  Clique em `Add Package`.
-5.  Escolha o target do seu projeto onde deseja usar o package e clique em `Add Package` novamente.
+```swift
+import USPAuthKit
 
+USPAuthService.configure(
+    withEnvironment: .dev,
+    consumerKey: "SEU_CONSUMER_KEY",
+    consumerSecret: "SEU_CONSUMER_SECRET",
+    appKey: "SUA_APP_KEY"
+)
+// Opcional: sobrescreva se seu backend exigir outro valor de header.
+// USPAuthService.sharedService().backendHeaderValue = "SEU-HEADER-INTERNO"
 
-## Estrutura do Package (Principais Componentes)
-### USPAuthService: 
-Singleton que serve como a fachada principal para a aplicação cliente. Orquestra o fluxo de login e a gestão de dados.
+USPAuthService.sharedService().updateNotificationToken("TOKEN_PUSH")
 
-### LoginWebViewController: 
-UIViewController que apresenta a WKWebView para o processo de login do utilizador.
+USPAuthService.sharedService().ensureLoggedIn(from: viewController) { user, error in
+    if let error {
+        print("Falha de login: \(error.localizedDescription)")
+        return
+    }
 
-### OAuth1Controller: 
-Classe responsável por toda a lógica do protocolo OAuth 1.0a (obtenção de tokens, assinatura de requisições, etc.) e pela interação com a WKWebView.
+    guard
+        let wsuserid = USPAuthService.sharedService().currentWSUserId(),
+        let user
+    else { return }
 
-### Dependências C: 
-Inclui hmac.h e Base64Transcoder.h para operações criptográficas.
+    print("Usuário autenticado: \(user.nomeUsuario)")
+    print("Token para APIs internas (wsuserid): \(wsuserid)")
+}
+```
 
-## Contribuições
-Contribuições são bem-vindas! Se encontrar bugs ou tiver sugestões de melhoria, por favor, abra uma issue ou submeta um pull request.
+## API pública principal
+
+- `USPAuthService.sharedService()`
+- `+ configureWithEnvironment:consumerKey:consumerSecret:appKey:`
+- `+ configureWithConfig:`
+- `- ensureLoggedInFromViewController:completion:`
+- `- currentUser`
+- `- currentWSUserId`
+- `- updateNotificationToken:`
+- `- registerTokenWithCompletion:`
+- `- invalidateTokenWithCompletion:`
+- `- checkTokenWithCompletion:`
+- `- logout`
+
+## Estrutura interna
+
+- `USPAuthService`: fachada/orquestração do fluxo.
+- `USPAuthSessionStore`: persistência da sessão (`NSUserDefaults`).
+- `OAuth1Controller`: assinatura e execução das etapas OAuth.
+- `HTTPClient`: POST JSON para serviços internos.
+- `USPAuthUser` e `USPAuthVinculo`: modelos de domínio retornados do backend.
+
+## Estratégia de testes em apps clientes
+
+Checklist mínimo:
+
+1. Login com sucesso retorna `USPAuthUser` e `currentWSUserId` não vazio.
+2. Reabertura do app reutiliza sessão (`isLoggedIn == true`) sem novo login.
+3. `updateNotificationToken` após login dispara registro de token sem erro.
+4. Chamadas internas do app usando `wsuserid` retornam autorização válida.
+5. `logout` remove sessão e exige novo login.
+
+## Testes do package
+
+```bash
+swift test
+```
