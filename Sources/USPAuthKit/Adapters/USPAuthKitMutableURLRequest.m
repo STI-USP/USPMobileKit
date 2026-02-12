@@ -8,12 +8,12 @@
 
 #if __has_include(<UIKit/UIKit.h>)
 
-#import "MyMutableURLRequest.h"
+#import "USPAuthKitMutableURLRequest.h"
 
-@implementation MyMutableURLRequest
+@implementation USPAuthKitMutableURLRequest
 
 + (NSMutableURLRequest *)requestWithURL:(NSURL *)URL {
-  MyMutableURLRequest *urlRequest = (MyMutableURLRequest *)[NSMutableURLRequest requestWithURL:URL];
+  USPAuthKitMutableURLRequest *urlRequest = (USPAuthKitMutableURLRequest *)[NSMutableURLRequest requestWithURL:URL];
   [urlRequest setValue:@"820ecd52-849f-4815-8eb3-bbf9f4440ac5" forHTTPHeaderField:@"DEV-USP-MOBILE"];
   [urlRequest setValue:@"PostmanRuntime/7.43.0" forHTTPHeaderField:@"User-Agent"];
   
