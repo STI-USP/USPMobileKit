@@ -7,19 +7,30 @@
 #if __has_include(<UIKit/UIKit.h>)
 
 #import "LoginWebViewController.h"
-#import "OAuth1Controller.h"
 #import "USPAuthService.h"
 #import <WebKit/WebKit.h>
 #import "USPAuthConfig.h"
+
+static UIColor *USPAuthBrandColor(void) {
+  return [UIColor colorWithRed:(20.0 / 255.0)
+                         green:(129.0 / 255.0)
+                          blue:(148.0 / 255.0)
+                         alpha:1.0];
+}
+
+static UIColor *USPAuthLoadingColor(void) {
+  return [UIColor colorWithRed:(100.0 / 255.0)
+                         green:(196.0 / 255.0)
+                          blue:(210.0 / 255.0)
+                         alpha:1.0];
+}
 
 @interface LoginWebViewController ()
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, strong) UIProgressView *progressView;
 @end
 
-@implementation LoginWebViewController {
-  OAuth1Controller *_oauthController;
-}
+@implementation LoginWebViewController
 
 #pragma mark - Init
 - (instancetype)init {
@@ -27,7 +38,6 @@
     USPAuthConfig *cfg = [USPAuthService sharedService].config;
     // Caso a config não esteja setada, é melhor falhar cedo para evitar login sem baseURL/keys
     NSAssert(cfg != nil, @"USPAuthService.config não configurado. Defina a config (baseURL/keys/appKey) antes do login.");
-    _oauthController = [[OAuth1Controller alloc] initWithConfig:cfg];
   }
   return self;
 }
@@ -41,7 +51,7 @@
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    self.navigationController.navigationBar.tintColor = UIColor.systemBlueColor;
+    self.navigationController.navigationBar.tintColor = UIColor.whiteColor;
 }
 
 - (void)loadView {
@@ -52,7 +62,7 @@
   // Barra de progresso fina logo abaixo do nav-bar
   self.progressView = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleBar];
   self.progressView.translatesAutoresizingMaskIntoConstraints = NO;
-  self.progressView.tintColor = [UIColor colorNamed:@"BrandAccent"] ?: UIColor.systemBlueColor;
+  self.progressView.tintColor = USPAuthLoadingColor();
   [root addSubview:self.progressView];
 
   // WebView
@@ -77,7 +87,7 @@
   [super viewDidLoad];
 
   // Título + botão Cancelar
-  self.title = @"Entrar";
+  //self.title = @"Entrar";
   UIBarButtonItem *cancelBtn = [[UIBarButtonItem alloc] initWithTitle:@"Cancelar" style:UIBarButtonItemStylePlain target:self action:@selector(cancel)];
   self.navigationItem.rightBarButtonItem = cancelBtn;
 
@@ -123,7 +133,7 @@
   }
 
   __weak typeof(self) weakSelf = self;
-  [_oauthController loginWithWebView:self.webView completion:^(NSDictionary<NSString *,NSString *> * _Nullable tokens, NSError * _Nullable error) {
+  [[USPAuthService sharedService] loginInWebView:self.webView completion:^(BOOL success, NSError * _Nullable error) {
     __strong typeof(weakSelf) self = weakSelf;
     if (error) {
       if (self.loginCompletion)
@@ -131,12 +141,8 @@
       return;
     }
 
-    USPAuthService *svc = [USPAuthService sharedService];
-    svc.oauthToken = tokens[@"oauth_token"];
-    svc.oauthTokenSecret = tokens[@"oauth_token_secret"];
-
     if (self.loginCompletion)
-      self.loginCompletion(YES, nil);
+      self.loginCompletion(success, nil);
   }];
 }
 
