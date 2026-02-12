@@ -29,6 +29,9 @@ NS_ASSUME_NONNULL_BEGIN
                                        oauthSecret:(NSString *)oauth_token_secret
                                             config:(USPAuthConfig *)config;
 
+/// Parser defensivo para query strings OAuth (ignora pares inválidos).
++ (NSDictionary<NSString *, NSString *> *)parametersFromQueryString:(nullable NSString *)queryString;
+
 @end
 
 NS_ASSUME_NONNULL_END

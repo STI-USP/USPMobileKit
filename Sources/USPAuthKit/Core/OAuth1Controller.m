@@ -102,24 +102,6 @@ static NSString * CHQueryStringFromParametersWithEncoding(NSDictionary *paramete
   return [pairs componentsJoinedByString:@"&"];
 }
 
-static inline NSDictionary * CHParametersFromQueryString(NSString *qs) {
-  NSMutableDictionary *params = [NSMutableDictionary dictionary];
-  NSScanner *scanner = [NSScanner scannerWithString:qs];
-  NSString *name, *value;
-  while (![scanner isAtEnd]) {
-    name = nil; [scanner scanUpToString:@"=" intoString:&name];
-    [scanner scanString:@"=" intoString:NULL];
-    value = nil; [scanner scanUpToString:@"&" intoString:&value];
-    [scanner scanString:@"&" intoString:NULL];
-    if (name && value) {
-      NSString *decodedName  = [name stringByRemovingPercentEncoding];
-      NSString *decodedValue = [value stringByRemovingPercentEncoding];
-      if (decodedName && decodedValue) params[decodedName] = decodedValue;
-    }
-  }
-  return params;
-}
-
 // -----------------------------------------------------------------------------
 // Interface privada
 // -----------------------------------------------------------------------------
@@ -216,7 +198,7 @@ typedef void (^WebViewHandler)(NSDictionary *oauthParams);
     completionHandler:^(NSData *data, NSURLResponse *r, NSError *err) {
     if (err) { dispatch_async(dispatch_get_main_queue(), ^{ completion(err, nil); }); return; }
     NSString *resp = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"";
-    NSDictionary *parsed = CHParametersFromQueryString(resp ?: @"");
+    NSDictionary *parsed = [self.class parametersFromQueryString:resp ?: @""];
     dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, parsed); });
   }] resume];
 }
@@ -272,7 +254,7 @@ typedef void (^WebViewHandler)(NSDictionary *oauthParams);
     completionHandler:^(NSData *data, NSURLResponse *r, NSError *err) {
     if (err) { dispatch_async(dispatch_get_main_queue(), ^{ completion(err, nil); }); return; }
     NSString *resp = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"";
-    NSDictionary *parsed = CHParametersFromQueryString(resp ?: @"");
+    NSDictionary *parsed = [self.class parametersFromQueryString:resp ?: @""];
     dispatch_async(dispatch_get_main_queue(), ^{ completion(nil, parsed); });
   }] resume];
 }
@@ -336,7 +318,7 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler
   NSRange range = [url rangeOfString:@"oauth_verifier="];
   if (range.location != NSNotFound) {
     NSString *query = [[url componentsSeparatedByString:@"?"] lastObject] ?: @"";
-    NSDictionary *paramsIn = CHParametersFromQueryString(query);
+    NSDictionary *paramsIn = [self.class parametersFromQueryString:query];
     
     // Remove sufixo "#_=_"
     NSMutableDictionary *params = [paramsIn mutableCopy];
@@ -364,6 +346,23 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler
 // -----------------------------------------------------------------------------
 // Helpers OAuth
 // -----------------------------------------------------------------------------
+
++ (NSDictionary<NSString *, NSString *> *)parametersFromQueryString:(NSString *)queryString {
+  if (queryString.length == 0) return @{};
+
+  NSString *normalizedQuery = [queryString hasPrefix:@"?"] ? [queryString substringFromIndex:1] : queryString;
+  NSURLComponents *components = [NSURLComponents componentsWithString:[NSString stringWithFormat:@"https://localhost/?%@", normalizedQuery]];
+  if (!components) return @{};
+
+  NSMutableDictionary<NSString *, NSString *> *params = [NSMutableDictionary dictionary];
+  for (NSURLQueryItem *item in components.queryItems) {
+    if (item.name.length == 0 || item.value == nil) {
+      continue;
+    }
+    params[item.name] = item.value;
+  }
+  return params;
+}
 
 + (NSMutableDictionary*)standardOauthParametersWithConsumerKey:(NSString*)consumerKey {
   return [@{

@@ -11,6 +11,20 @@
 #import <WebKit/WebKit.h>
 #import "USPAuthConfig.h"
 
+static UIColor *USPAuthBrandColor(void) {
+  return [UIColor colorWithRed:(20.0 / 255.0)
+                         green:(129.0 / 255.0)
+                          blue:(148.0 / 255.0)
+                         alpha:1.0];
+}
+
+static UIColor *USPAuthLoadingColor(void) {
+  return [UIColor colorWithRed:(100.0 / 255.0)
+                         green:(196.0 / 255.0)
+                          blue:(210.0 / 255.0)
+                         alpha:1.0];
+}
+
 @interface LoginWebViewController ()
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, strong) UIProgressView *progressView;
@@ -37,7 +51,7 @@
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    self.navigationController.navigationBar.tintColor = UIColor.systemBlueColor;
+    self.navigationController.navigationBar.tintColor = UIColor.whiteColor;
 }
 
 - (void)loadView {
@@ -48,7 +62,7 @@
   // Barra de progresso fina logo abaixo do nav-bar
   self.progressView = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleBar];
   self.progressView.translatesAutoresizingMaskIntoConstraints = NO;
-  self.progressView.tintColor = [UIColor colorNamed:@"BrandAccent"] ?: UIColor.systemBlueColor;
+  self.progressView.tintColor = USPAuthLoadingColor();
   [root addSubview:self.progressView];
 
   // WebView
@@ -73,7 +87,7 @@
   [super viewDidLoad];
 
   // Título + botão Cancelar
-  self.title = @"Entrar";
+  //self.title = @"Entrar";
   UIBarButtonItem *cancelBtn = [[UIBarButtonItem alloc] initWithTitle:@"Cancelar" style:UIBarButtonItemStylePlain target:self action:@selector(cancel)];
   self.navigationItem.rightBarButtonItem = cancelBtn;
 

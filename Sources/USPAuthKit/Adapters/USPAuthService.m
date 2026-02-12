@@ -22,6 +22,13 @@ static NSString * const kCheckPath = @"/mobile/servicos/oauth/consultar";
 static NSString * const kBackendHeaderName = @"DEV-USP-MOBILE";
 static NSString * const kDefaultBackendHeaderValue = @"820ecd52-849f-4815-8eb3-bbf9f4440ac5";
 
+static UIColor *USPAuthBrandColor(void) {
+  return [UIColor colorWithRed:(20.0 / 255.0)
+                         green:(129.0 / 255.0)
+                          blue:(148.0 / 255.0)
+                         alpha:1.0];
+}
+
 typedef NS_ENUM(NSInteger, USPAuthServiceErrorCode) {
   USPAuthServiceErrorCodeMissingConfig = 1000,
   USPAuthServiceErrorCodeLoginInProgress = 1001,
@@ -44,6 +51,9 @@ typedef NS_ENUM(NSInteger, USPAuthServiceErrorCode) {
 @end
 
 @implementation USPAuthService
+
+@synthesize oauthToken = _oauthToken;
+@synthesize oauthTokenSecret = _oauthTokenSecret;
 
 #pragma mark - Lifecycle
 
@@ -194,7 +204,7 @@ typedef NS_ENUM(NSInteger, USPAuthServiceErrorCode) {
   if (@available(iOS 13.0, *)) {
     UINavigationBarAppearance *appearance = [UINavigationBarAppearance new];
     [appearance configureWithOpaqueBackground];
-    appearance.backgroundColor = [UIColor colorNamed:@"BrandPrimary"] ?: UIColor.systemBlueColor;
+    appearance.backgroundColor = USPAuthBrandColor();
     appearance.titleTextAttributes = @{ NSForegroundColorAttributeName : UIColor.whiteColor };
 
     nav.navigationBar.standardAppearance = appearance;
