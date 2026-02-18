@@ -11,13 +11,6 @@
 #import <WebKit/WebKit.h>
 #import "USPAuthConfig.h"
 
-static UIColor *USPAuthBrandColor(void) {
-  return [UIColor colorWithRed:(20.0 / 255.0)
-                         green:(129.0 / 255.0)
-                          blue:(148.0 / 255.0)
-                         alpha:1.0];
-}
-
 static UIColor *USPAuthLoadingColor(void) {
   return [UIColor colorWithRed:(100.0 / 255.0)
                          green:(196.0 / 255.0)
@@ -48,11 +41,6 @@ static UIColor *USPAuthLoadingColor(void) {
 }
 
 #pragma mark - View Lifecycle
-
-- (void)viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
-    self.navigationController.navigationBar.tintColor = UIColor.whiteColor;
-}
 
 - (void)loadView {
   UIView *root = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
