@@ -4,14 +4,14 @@
 
 ## O que este kit faz
 
-Este projeto **não implementa apenas OAuth puro**. O fluxo completo é:
+Este projeto **implementa OAuth USP**. O fluxo completo é:
 
 1. Executa OAuth 1.0a (`request_token` -> `authorize` -> `access_token`).
-2. Faz `POST /wsusuario/oauth/usuariousp` para obter dados de usuário.
+2. Obtém dados de usuário `wsusuario`. 
 3. Monta e cacheia `USPAuthUser`.
-4. Usa `wsuserid` para registrar token no backend (`/mobile/servicos/oauth/registrar`).
+4. Registra token no backend.
 
-Nos apps clientes, o identificador para chamadas internas deve ser o `wsuserid` (token funcional de autorização interna), e não um id de usuário de domínio próprio.
+Nos apps clientes, o identificador para chamadas internas deve ser o `wsuserid` (token funcional de autorização interna).
 
 ## Requisitos
 
