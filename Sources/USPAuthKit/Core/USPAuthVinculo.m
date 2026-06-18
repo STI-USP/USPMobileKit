@@ -7,19 +7,26 @@
 
 #import "USPAuthVinculo.h"
 
+// JSON `null` deserializes to NSNull, not nil, so a plain `?:` does not
+// catch it. Treat anything that isn't an NSString as absent to avoid
+// storing NSNull in a property the header declares as nonnull NSString.
+static NSString *USPAuthStringOrEmpty(id value) {
+    return [value isKindOfClass:[NSString class]] ? value : @"";
+}
+
 @implementation USPAuthVinculo
 
 - (instancetype)initWithDictionary:(NSDictionary<NSString*, id>*)dict {
     self = [super init];
     if (!self) return nil;
-    
+
     _codigoSetor    = [dict[@"codigoSetor"]    integerValue];
     _codigoUnidade  = [dict[@"codigoUnidade"]  integerValue];
-    _nomeUnidade    = [dict[@"nomeUnidade"]    ?: @"" copy];
-    _nomeVinculo    = [dict[@"nomeVinculo"]    ?: @"" copy];
-    _siglaUnidade   = [dict[@"siglaUnidade"]   ?: @"" copy];
-    _tipoVinculo    = [dict[@"tipoVinculo"]    ?: @"" copy];
-    
+    _nomeUnidade    = [USPAuthStringOrEmpty(dict[@"nomeUnidade"])   copy];
+    _nomeVinculo    = [USPAuthStringOrEmpty(dict[@"nomeVinculo"])   copy];
+    _siglaUnidade   = [USPAuthStringOrEmpty(dict[@"siglaUnidade"])  copy];
+    _tipoVinculo    = [USPAuthStringOrEmpty(dict[@"tipoVinculo"])   copy];
+
     return self;
 }
 
