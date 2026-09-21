@@ -1,6 +1,13 @@
 // Package.swift
 // swift-tools-version: 6.1
-// The swift-tools-version declares the minimum version of Swift required to build this package.
+// USPMobileKit — infraestrutura compartilhada para apps iOS da STI/USP.
+//
+// Products independentes:
+//   • USPAuthKit          — autenticação OAuth 1.0a
+//   • USPObservabilityKit — instrumentação de requests (Mobile API Observability Contract)
+//
+// Cada app importa somente o(s) product(s) de que precisa.
+// Não existe dependência entre USPAuthKit e USPObservabilityKit.
 
 import PackageDescription
 import Foundation
@@ -15,14 +22,34 @@ let extraFlags: [SwiftSetting] = {
 }()
 
 let package = Package(
-  name: "USPAuthKit",
+  name: "USPMobileKit",
   platforms: [
-    .iOS(.v12),
+    .iOS(.v14),
   ],
   products: [
-    .library(name: "USPAuthKit", targets: ["USPAuthKit"]),
+    // ─── Autenticação ──────────────────────────────────────────────────────────
+    .library(
+      name: "USPAuthKit",
+      targets: ["USPAuthKit"]
+    ),
+
+    // ─── Observabilidade ───────────────────────────────────────────────────────
+    .library(
+      name: "USPObservabilityKit",
+      targets: ["USPObservabilityKit"]
+    ),
+
+    // ─── (Iteração 2) USPObservabilityOpenTelemetry — W3C Trace Context ────────
+    // Será adicionado quando a dependência opentelemetry-swift for introduzida.
+
+    // ─── (Iteração 3) USPObservabilityFirebase — Performance + Crashlytics ─────
+    // Será adicionado quando a integração Firebase for introduzida.
   ],
   targets: [
+
+    // ── USPAuthKit ─────────────────────────────────────────────────────────────
+    // Target Objective-C/C legado. Não possui dependências SPM externas.
+    // API pública preservada integralmente (zero breaking changes).
     .target(
       name: "USPAuthKit",
       publicHeadersPath: "include",
@@ -33,6 +60,26 @@ let package = Package(
       ],
       swiftSettings: extraFlags
     ),
-    .testTarget(name: "USPAuthKitTests", dependencies: ["USPAuthKit"]),
+    .testTarget(
+      name: "USPAuthKitTests",
+      dependencies: ["USPAuthKit"]
+    ),
+
+    // ── USPObservabilityKit ────────────────────────────────────────────────────
+    // Target Swift puro. Não depende de USPAuthKit nem de dependências externas.
+    // Responsabilidade: Mobile API Observability Contract (USP-* headers).
+    .target(
+      name: "USPObservabilityKit",
+      path: "Sources/USPObservabilityKit",
+      swiftSettings: [
+        .swiftLanguageMode(.v6)
+      ]
+    ),
+    .testTarget(
+      name: "USPObservabilityKitTests",
+      dependencies: ["USPObservabilityKit"],
+      path: "Tests/USPObservabilityKitTests"
+    ),
+
   ]
 )
