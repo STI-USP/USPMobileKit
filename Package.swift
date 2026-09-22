@@ -80,6 +80,11 @@ let package = Package(
       dependencies: ["USPObservabilityKit"],
       path: "Tests/USPObservabilityKitTests"
     ),
+    .testTarget(
+      name: "USPMobileKitCompatibilityTests",
+      dependencies: ["USPAuthKit", "USPObservabilityKit"],
+      path: "Tests/USPMobileKitCompatibilityTests"
+    ),
 
   ]
 )

@@ -30,10 +30,9 @@
 //    um identificador pseudônimo de volume/correlação e é análogo
 //    ao comportamento do Firebase Installation ID em modo padrão.
 //
-//    Para evitar completamente esse cenário, o ID poderia ser
-//    armazenado no Keychain com kSecAttrSynchronizable = false
-//    (não incluído no backup). Essa migração pode ser feita em
-//    Iteração futura sem breaking change na API pública.
+//    O ID permanece em UserDefaults deliberadamente. Não migrar para
+//    Keychain apenas para fazê-lo sobreviver a reinstalações: isso
+//    alteraria seu contrato de identificador de instalação.
 //
 // ═══════════════════════════════════════════════════════════════
 //  Privacidade

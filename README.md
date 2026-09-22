@@ -16,13 +16,23 @@ Os módulos podem coexistir no mesmo app, mas **não possuem dependência entre 
 
 ## Instalação
 
-Adicione o repositório em **File › Add Package Dependencies…** no Xcode:
+O nome do package é **`USPMobileKit`** e os products SPM são
+**`USPAuthKit`** e **`USPObservabilityKit`**. No estado atual, a URL Git
+configurada como `origin` ainda é:
 
 ```
-https://github.com/sti-usp/USPMobileKit
+git@gitlab.uspdigital.usp.br:divisao-de-sistemas/mobile/authkit.git
 ```
 
-Selecione somente o(s) produto(s) necessários para o seu target.
+O diretório de trabalho foi renomeado fisicamente para `USPMobileKit`, mas o
+projeto remoto e sua URL canônica ainda precisam ser renomeados/publicados como
+`USPMobileKit` antes da release. Não use um redirect de GitLab como mecanismo
+de compatibilidade: a release deve anunciar e usar a nova URL canônica quando
+ela estiver disponível. Se a URL ainda for a exibida acima, a release fica
+pendente desse ajuste externo.
+
+Selecione somente o(s) product(s) necessários para o target. O product
+`USPAuthKit` mantém seu nome e APIs públicas existentes.
 
 ---
 
@@ -55,10 +65,10 @@ USPAuthService.configure(
 )
 
 // Login
-USPAuthService.sharedService().ensureLoggedIn(from: viewController) { user, error in
+USPAuthService.shared().ensureLoggedIn(from: viewController) { user, error in
     guard let user, error == nil else { return }
     print("Autenticado: \(user.nomeUsuario)")
-    print("Token interno: \(USPAuthService.sharedService().currentWSUserId() ?? "")")
+    print("Token interno: \(USPAuthService.shared().currentWSUserId() ?? "")")
 }
 ```
 
@@ -66,7 +76,7 @@ USPAuthService.sharedService().ensureLoggedIn(from: viewController) { user, erro
 
 | Símbolo | Descrição |
 |---|---|
-| `USPAuthService.sharedService()` | Singleton do serviço |
+| `USPAuthService.shared()` | Singleton do serviço em Swift (`+sharedService` em Objective-C) |
 | `+configureWithEnvironment:consumerKey:consumerSecret:appKey:` | Configuração rápida |
 | `+configureWithConfig:` | Configuração explícita com `USPAuthConfig` |
 | `-ensureLoggedInFromViewController:completion:` | Login via WebView |
@@ -193,7 +203,7 @@ let instrumenter = USPContextInstrumenter(
 | Reinstalação | Novo UUID gerado |
 | Restore de backup iCloud | ID do dispositivo de origem é restaurado* |
 
-\* Em um restore de backup, dois dispositivos podem ter o mesmo ID temporariamente. Comportamento aceitável para um identificador pseudônimo de correlação de volume. Nunca associar ao usuário autenticado.
+\* Em um restore de backup, dois dispositivos podem ter o mesmo ID temporariamente. Comportamento aceitável para um identificador pseudônimo de correlação de volume. Nunca associar ao usuário autenticado. O ID permanece em `UserDefaults` deliberadamente: não usar Keychain para fazê-lo sobreviver a reinstalações.
 
 ### Protocolos públicos
 
@@ -227,7 +237,7 @@ import USPAuthKit
 // Sem import USPObservabilityKit
 
 USPAuthService.configure(withEnvironment: .prod, consumerKey: "…", consumerSecret: "…", appKey: "…")
-USPAuthService.sharedService().ensureLoggedIn(from: self) { user, _ in … }
+USPAuthService.shared().ensureLoggedIn(from: self) { user, _ in … }
 ```
 
 ## Exemplo: app usando somente Observabilidade
@@ -260,7 +270,7 @@ final class APIClient {
     func get(_ url: URL) async throws -> Data {
         var request = URLRequest(url: url)
         // Auth adiciona Authorization via wsuserid
-        if let token = USPAuthService.sharedService().currentWSUserId() {
+        if let token = USPAuthService.shared().currentWSUserId() {
             request.setValue(token, forHTTPHeaderField: "Authorization")
         }
         // Observabilidade adiciona USP-* headers
