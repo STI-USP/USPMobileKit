@@ -321,7 +321,7 @@ dois products podem coexistir.
 | `import USPAuthKit` continua funcionando em apps iOS 14+ | ✅ |
 | Product name `USPAuthKit` preservado | ✅ |
 | Todos os headers públicos de USPAuthKit inalterados | ✅ |
-| URL Git canônica | ⚠️ Remoto ainda usa `.../mobile/authkit.git`; rename remoto pendente antes da release |
+| URL Git canônica | `https://github.com/STI-USP/USPMobileKit.git` |
 | Apps com deployment target iOS 12/13 precisam elevar para iOS 14 | ⚠️ |
 | Testes de USPAuthKit todos passando | ✅ |
 
@@ -335,15 +335,13 @@ A mudança de `name: "USPAuthKit"` para `name: "USPMobileKit"` no `Package.swift
 |---|---|
 | Package name SPM | `USPMobileKit` |
 | Nome físico local | `USPMobileKit` |
-| URL Git canônica atual | `git@gitlab.uspdigital.usp.br:divisao-de-sistemas/mobile/authkit.git` |
+| URL Git canônica atual | `https://github.com/STI-USP/USPMobileKit.git` |
 | Product Auth | `USPAuthKit` (preservado) |
 
-O rename físico local foi realizado, mas o remoto GitLab ainda se chama
-`authkit.git`. Portanto, o requisito de rename do repositório **não está
-integralmente concluído** e a URL canônica de distribuição `USPMobileKit` ainda
-não existe neste checkout. Antes de criar tag/release, renomear ou criar o
-repositório remoto com sua URL canônica e atualizar `origin`; não depender de
-redirect permanente do GitLab.
+O repositório canônico já existe no GitHub e é o `origin` deste checkout. O
+GitLab `authkit.git` é preservado somente como remote `legacy`, para
+rastreabilidade; novas integrações devem usar a URL GitHub canônica e não
+depender de redirects.
 
 ---
 

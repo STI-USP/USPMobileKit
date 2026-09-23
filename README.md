@@ -17,19 +17,14 @@ Os módulos podem coexistir no mesmo app, mas **não possuem dependência entre 
 ## Instalação
 
 O nome do package é **`USPMobileKit`** e os products SPM são
-**`USPAuthKit`** e **`USPObservabilityKit`**. No estado atual, a URL Git
-configurada como `origin` ainda é:
+**`USPAuthKit`** e **`USPObservabilityKit`**. A URL Git canônica é:
 
 ```
-git@gitlab.uspdigital.usp.br:divisao-de-sistemas/mobile/authkit.git
+https://github.com/STI-USP/USPMobileKit.git
 ```
 
-O diretório de trabalho foi renomeado fisicamente para `USPMobileKit`, mas o
-projeto remoto e sua URL canônica ainda precisam ser renomeados/publicados como
-`USPMobileKit` antes da release. Não use um redirect de GitLab como mecanismo
-de compatibilidade: a release deve anunciar e usar a nova URL canônica quando
-ela estiver disponível. Se a URL ainda for a exibida acima, a release fica
-pendente desse ajuste externo.
+O GitLab legado é preservado somente como remote `legacy` para rastreabilidade.
+Novas integrações devem usar a URL GitHub canônica acima.
 
 Selecione somente o(s) product(s) necessários para o target. O product
 `USPAuthKit` mantém seu nome e APIs públicas existentes.

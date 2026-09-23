@@ -15,11 +15,10 @@ pública de `USPAuthKit`.
 
 ## Distribution URL
 
-O checkout local já se chama `USPMobileKit`, mas o `origin` auditado ainda é
-`git@gitlab.uspdigital.usp.br:divisao-de-sistemas/mobile/authkit.git`.
-Não criar tag/release enquanto o repositório remoto não for renomeado ou
-publicado com uma URL canônica `USPMobileKit` e o `origin` não for atualizado.
-Não depender de redirect permanente do GitLab.
+O repositório canônico é
+`https://github.com/STI-USP/USPMobileKit.git`; `origin` aponta para ele. O
+GitLab legado permanece configurado somente como remote `legacy`, para
+rastreabilidade. Novas integrações não devem depender de redirects.
 
 ## Installation ID
 

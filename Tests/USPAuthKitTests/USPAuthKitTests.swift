@@ -52,6 +52,45 @@ final class USPAuthKitTests: XCTestCase {
         XCTAssertTrue(user.vinculos.isEmpty)
     }
 
+    func testUserMappingConvertsNSNullStringFieldsToEmptyStrings() {
+        let rawUser: [String: Any] = [
+            "loginUsuario": NSNull(),
+            "nomeUsuario": NSNull(),
+            "emailPrincipalUsuario": NSNull(),
+            "emailAlternativoUsuario": NSNull(),
+            "emailUspUsuario": NSNull(),
+            "numeroTelefoneFormatado": NSNull(),
+            "tipoUsuario": NSNull(),
+            "wsuserid": NSNull(),
+            "vinculo": [
+                [
+                    "codigoSetor": 10,
+                    "codigoUnidade": 20,
+                    "nomeUnidade": NSNull(),
+                    "nomeVinculo": NSNull(),
+                    "siglaUnidade": NSNull(),
+                    "tipoVinculo": NSNull()
+                ]
+            ]
+        ]
+
+        let user = USPAuthUser(dictionary: rawUser)
+
+        XCTAssertEqual(user.loginUsuario, "")
+        XCTAssertEqual(user.nomeUsuario, "")
+        XCTAssertEqual(user.emailPrincipalUsuario, "")
+        XCTAssertEqual(user.emailAlternativoUsuario, "")
+        XCTAssertEqual(user.emailUspUsuario, "")
+        XCTAssertEqual(user.numeroTelefoneFormatado, "")
+        XCTAssertEqual(user.tipoUsuario, "")
+        XCTAssertEqual(user.wsuserid, "")
+        XCTAssertEqual(user.vinculos.count, 1)
+        XCTAssertEqual(user.vinculos.first?.nomeUnidade, "")
+        XCTAssertEqual(user.vinculos.first?.nomeVinculo, "")
+        XCTAssertEqual(user.vinculos.first?.siglaUnidade, "")
+        XCTAssertEqual(user.vinculos.first?.tipoVinculo, "")
+    }
+
     func testConfigFactoryMethodsExposeExpectedBaseURL() {
         let dev = USPAuthConfig.dev(withConsumerKey: "ck", consumerSecret: "cs", appKey: "app")
         let prod = USPAuthConfig.prod(withConsumerKey: "ck", consumerSecret: "cs", appKey: "app")
