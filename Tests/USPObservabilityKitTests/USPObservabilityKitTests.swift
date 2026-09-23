@@ -38,6 +38,7 @@ private func makeInstrumenter(
     installationID: String = "TEST-UUID-1234"
 ) -> USPContextInstrumenter {
     USPContextInstrumenter(
+        configuration:  ObservabilityConfiguration(allowedHosts: ["api.usp.br"]),
         appInfo:        MockAppInfoProvider(platform: platform, version: version, build: build),
         osVersion:      MockOSVersionProvider(osVersion: osVersion),
         deviceModel:    MockDeviceModelProvider(deviceModel: deviceModel),
@@ -317,6 +318,7 @@ final class USPObservabilityKitTests: XCTestCase {
         XCTAssertEqual(USPContextInstrumenter.HeaderField.osVersion,      "USP-OS-Version")
         XCTAssertEqual(USPContextInstrumenter.HeaderField.deviceModel,    "USP-Device-Model")
         XCTAssertEqual(USPContextInstrumenter.HeaderField.installationID, "USP-Installation-Id")
+        XCTAssertEqual(USPContextInstrumenter.HeaderField.traceparent,    "traceparent")
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -391,6 +393,7 @@ final class USPObservabilityKitTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let instrumenter = USPContextInstrumenter(
+            configuration:  ObservabilityConfiguration(allowedHosts: ["api.usp.br"]),
             appInfo:        DefaultAppInfoProvider(bundle: .main),
             osVersion:      DefaultOSVersionProvider(),
             deviceModel:    DefaultDeviceModelProvider(),
@@ -485,13 +488,19 @@ final class USPObservabilityKitTests: XCTestCase {
         let tracing: any HTTPRequestInstrumenting = MockTracing()
         let composite = CompositeInstrumenter([tracing])
         XCTAssertNotNil(composite) // Só para usar composite e evitar warning
+
+        let concrete: any TracingInstrumenting = makeInstrumenter()
+        XCTAssertNotNil(concrete)
     }
 
     func testTracingInstrumenterCanBeComposedWithUSPContext() throws {
         struct MockTracing: TracingInstrumenting {
             func instrument(_ request: URLRequest) throws -> URLRequest {
                 var r = request
-                r.setValue("00-abc123-def456-01", forHTTPHeaderField: "traceparent")
+                r.setValue(
+                    "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01",
+                    forHTTPHeaderField: "traceparent"
+                )
                 return r
             }
         }
@@ -503,7 +512,10 @@ final class USPObservabilityKitTests: XCTestCase {
         let result = try composite.instrument(makeRequest())
 
         XCTAssertEqual(result.value(forHTTPHeaderField: "USP-App-Platform"), "ios")
-        XCTAssertEqual(result.value(forHTTPHeaderField: "traceparent"), "00-abc123-def456-01")
+        XCTAssertEqual(
+            result.value(forHTTPHeaderField: "traceparent"),
+            "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01"
+        )
     }
 
     // ─────────────────────────────────────────────────────────────────
