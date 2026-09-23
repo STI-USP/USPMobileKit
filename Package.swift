@@ -39,8 +39,8 @@ let package = Package(
       targets: ["USPObservabilityKit"]
     ),
 
-    // ─── (Iteração 2) USPObservabilityOpenTelemetry — W3C Trace Context ────────
-    // Será adicionado quando a dependência opentelemetry-swift for introduzida.
+    // W3C Trace Context mínimo pertence ao USPObservabilityKit e não usa OTel SDK.
+    // Um adapter OpenTelemetry futuro só deve existir quando tracing completo for aprovado.
 
     // ─── (Iteração 3) USPObservabilityFirebase — Performance + Crashlytics ─────
     // Será adicionado quando a integração Firebase for introduzida.
@@ -67,7 +67,7 @@ let package = Package(
 
     // ── USPObservabilityKit ────────────────────────────────────────────────────
     // Target Swift puro. Não depende de USPAuthKit nem de dependências externas.
-    // Responsabilidade: Mobile API Observability Contract (USP-* headers).
+    // Responsabilidade: Mobile API Observability Contract (USP-* + traceparent).
     .target(
       name: "USPObservabilityKit",
       path: "Sources/USPObservabilityKit",

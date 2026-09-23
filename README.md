@@ -102,7 +102,8 @@ USPAuthService.shared().ensureLoggedIn(from: viewController) { user, error in
 
 Implementação iOS do **Mobile API Observability Contract** da STI/USP.
 
-Fornece instrumentação reutilizável de `URLRequest`, adicionando headers de contexto que permitem correlação de requests com metadados do app e da instalação.
+Fornece instrumentação reutilizável de `URLRequest`, adicionando contexto do app e
+um `traceparent` W3C para correlacionar cada operação entre App e Backend.
 
 O módulo **não implementa um HTTPClient**. Cada app mantém sua própria camada de networking e injeta o instrumentador.
 
@@ -120,20 +121,57 @@ No Xcode, selecione o produto **USPObservabilityKit**.
 | `USP-OS-Version` | `ProcessInfo.operatingSystemVersion` | `17.5` |
 | `USP-Device-Model` | `sysctlbyname("hw.machine")` | `iPhone14,2` |
 | `USP-Installation-Id` | UUID pseudônimo persistido | `A3F1B2C4-…` |
+| `traceparent` | contexto W3C aleatório por operação | `00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01` |
+
+O fluxo resultante é:
+
+```text
+Feature → Repository / Service → HTTPClient → USPObservabilityKit
+        → valida host → adiciona USP-App-* + traceparent → URLSession → API
+```
+
+O `trace_id` possui 16 bytes aleatórios e identifica uma operação lógica. O
+`installation_id` é um UUID persistido que identifica a instalação do app. Um não
+é derivado do outro e nenhum deles representa o usuário.
 
 ### Privacidade e segurança
 
 - ✗ Nenhum dado pessoal (sem e-mail, nome, CPF, número USP)
 - ✗ Sem IDFA, IDFV, serial number
-- ✗ O `Authorization` e outros headers existentes são **preservados**
+- ✗ Sem user ID, número USP, token ou installation ID dentro do `traceparent`
+- ✓ `Authorization`, `Content-Type` e outros headers existentes são **preservados**
+- ✓ Headers de observabilidade são enviados somente para a allowlist do app
 - ✓ Todos os providers são injetáveis e substituíveis em testes
+
+### Allowlist de hosts
+
+A configuração pertence ao app consumidor; o package não contém hosts
+institucionais hardcoded:
+
+```swift
+let configuration = ObservabilityConfiguration(allowedHosts: [
+    "api.usp.br",
+    "cardapio.usp.br",
+])
+let observability = USPContextInstrumenter(configuration: configuration)
+```
+
+O matching é exato e case-insensitive. Subdomínios não são incluídos
+implicitamente: autorizar `api.usp.br` não autoriza `sub.api.usp.br`, e
+`api.usp.br.attacker.com` nunca corresponde. Informe cada host necessário. Schemes,
+portas, paths e wildcards não são aceitos como entradas.
+
+A allowlist padrão é vazia. Nesse caso — ou quando a URL aponta para terceiro — a
+request é devolvida intacta, sem adicionar `traceparent` ou `USP-App-*` e sem erro.
 
 ### Uso mínimo
 
 ```swift
 import USPObservabilityKit
 
-let observability = USPContextInstrumenter()
+let observability = USPContextInstrumenter(
+    configuration: ObservabilityConfiguration(allowedHosts: ["api.usp.br"])
+)
 
 // No HTTPClient do app
 let instrumented = try observability.instrument(request)
@@ -146,30 +184,51 @@ let (data, response) = try await URLSession.shared.data(for: instrumented)
 import USPObservabilityKit
 
 final class HTTPClient {
-    private let observability: any HTTPRequestInstrumenting
+    private let observability: USPContextInstrumenter
 
-    init(observability: any HTTPRequestInstrumenting = USPContextInstrumenter()) {
+    init(observability: USPContextInstrumenter) {
         self.observability = observability
     }
 
     func execute(_ request: URLRequest) async throws -> (Data, URLResponse) {
-        let instrumented = try observability.instrument(request)
-        return try await URLSession.shared.data(for: instrumented)
+        let result = try observability.instrumentWithTraceContext(request)
+        do {
+            return try await URLSession.shared.data(for: result.request)
+        } catch {
+            // Integração do app: UI, suporte ou telemetria de uma etapa futura.
+            reportNetworkFailure(error, traceID: result.traceContext?.traceID)
+            throw error
+        }
     }
 }
 ```
 
-### Composição de instrumentadores
+### Recuperação do trace ID e retry
 
 ```swift
-import USPObservabilityKit
-// import USPObservabilityOpenTelemetry  ← Iteração 2
+let first = try observability.instrumentWithTraceContext(request)
+let traceID = first.traceContext?.traceID // UI, suporte ou integração futura
 
-let observability = CompositeInstrumenter([
-    USPContextInstrumenter(),       // USP-* headers (disponível agora)
-    // OTelTracingInstrumenter()    // traceparent   (Iteração 2)
-])
+// A política de retry continua no HTTPClient do app.
+if let retryContext = first.traceContext?.nextAttempt() {
+    let retry = try observability.instrumentWithTraceContext(
+        retryRequest,
+        context: retryContext
+    )
+    // retry.traceContext?.traceID == traceID
+    // retry.traceContext?.parentID != first.traceContext?.parentID
+}
 ```
+
+Cada chamada nova gera outro `trace_id`. `nextAttempt()` preserva o `trace_id` da
+operação e cria outro `parent-id` para a tentativa seguinte. Se a request já contém
+um `traceparent` válido, a instrumentação normal o preserva; um contexto passado
+explicitamente para retry prevalece. Um `traceparent` inválido é substituído apenas
+em host autorizado. Headers `USP-*` preexistentes também são preservados.
+
+O `CompositeInstrumenter` permanece disponível para encadear outras preocupações
+independentes. O `USPContextInstrumenter` já adiciona tanto `USP-*` quanto
+`traceparent`, portanto não é necessário compor outro instrumentador de tracing.
 
 ### Injeção de providers customizados (testes)
 
@@ -181,6 +240,7 @@ struct MockAppInfo: AppInfoProviding {
 }
 
 let instrumenter = USPContextInstrumenter(
+    configuration: ObservabilityConfiguration(allowedHosts: ["api.usp.br"]),
     appInfo:        MockAppInfo(),
     osVersion:      MockOSVersionProvider(osVersion: "17.0"),
     deviceModel:    MockDeviceModelProvider(deviceModel: "iPhone14,2"),
@@ -211,6 +271,37 @@ public protocol HTTPRequestInstrumenting: Sendable {
 // Ponto de extensão para W3C Trace Context (Iteração 2)
 public protocol TracingInstrumenting: HTTPRequestInstrumenting {}
 
+public struct ObservabilityConfiguration: Sendable, Equatable {
+    public let allowedHosts: Set<String>
+    public init(allowedHosts: [String])
+}
+
+public struct TraceContext: Sendable, Equatable {
+    public let traceID: String
+    public let parentID: String
+    public let flags: TraceFlags
+    public var traceparent: String { get }
+    public static func create(flags: TraceFlags = .sampled) -> TraceContext
+    public func nextAttempt() -> TraceContext
+}
+
+public struct InstrumentedRequest: Sendable {
+    public let request: URLRequest
+    public let traceContext: TraceContext?
+}
+
+public struct USPContextInstrumenter: TracingInstrumenting {
+    // instrument(_:) -> URLRequest continua disponível.
+    public func instrumentWithTraceContext(
+        _ request: URLRequest
+    ) throws -> InstrumentedRequest
+
+    public func instrumentWithTraceContext(
+        _ request: URLRequest,
+        context: TraceContext
+    ) throws -> InstrumentedRequest
+}
+
 // Providers injetáveis
 public protocol AppInfoProviding: Sendable { ... }
 public protocol OSVersionProviding: Sendable { ... }
@@ -222,6 +313,13 @@ public protocol InstallationIDProviding: Sendable { ... }
 
 - iOS 14+
 - Sem dependências SPM externas
+- Sem Firebase ou OpenTelemetry SDK
+
+### Limitações atuais
+
+Esta iteração propaga apenas `traceparent` versão `00`. Ainda não há `tracestate`,
+`baggage`, spans internos, sampling configurável, exporter, OTLP, Collector,
+Crashlytics, Firebase Performance ou retry automático.
 
 ---
 
@@ -241,7 +339,9 @@ USPAuthService.shared().ensureLoggedIn(from: self) { user, _ in … }
 import USPObservabilityKit
 // Sem import USPAuthKit
 
-let observability = USPContextInstrumenter()
+let observability = USPContextInstrumenter(
+    configuration: ObservabilityConfiguration(allowedHosts: ["api.usp.br"])
+)
 let request = try observability.instrument(URLRequest(url: url))
 let (data, _) = try await URLSession.shared.data(for: request)
 ```
@@ -256,7 +356,9 @@ import USPObservabilityKit
 USPAuthService.configure(withEnvironment: .prod, consumerKey: "…", consumerSecret: "…", appKey: "…")
 
 // Observabilidade — injetada no HTTPClient
-let observability = USPContextInstrumenter()
+let observability = USPContextInstrumenter(
+    configuration: ObservabilityConfiguration(allowedHosts: ["api.usp.br"])
+)
 
 final class APIClient {
     private let observability: any HTTPRequestInstrumenting
@@ -268,7 +370,7 @@ final class APIClient {
         if let token = USPAuthService.shared().currentWSUserId() {
             request.setValue(token, forHTTPHeaderField: "Authorization")
         }
-        // Observabilidade adiciona USP-* headers
+        // Observabilidade adiciona USP-* e traceparent somente ao host autorizado
         let instrumented = try observability.instrument(request)
         let (data, _) = try await URLSession.shared.data(for: instrumented)
         return data
@@ -288,8 +390,8 @@ final class APIClient {
     USPAuthKit              USPObservabilityKit
          │                         │
    autenticação              observabilidade
-   OAuth 1.0a                USP-* headers
-   sessão / logout           Installation ID
+   OAuth 1.0a                USP-* + traceparent
+   sessão / logout           allowlist de hosts
    usuário USP               composição de
                              instrumentadores
 ```
@@ -304,7 +406,7 @@ Os módulos **não se conhecem** e podem ser usados independentemente.
 |---|---|---|
 | 1 | `USPAuthKit` | ✅ Disponível |
 | 1 | `USPObservabilityKit` | ✅ Disponível |
-| 2 | `USPObservabilityOpenTelemetry` | 🔲 Planejado — W3C Trace Context via OTel |
+| 2 | W3C Trace Context no `USPObservabilityKit` | ✅ Disponível — sem OTel SDK |
 | 3 | `USPObservabilityFirebase` | 🔲 Planejado — Performance + Crashlytics |
 
 ---
