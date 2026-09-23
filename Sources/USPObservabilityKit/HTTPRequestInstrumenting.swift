@@ -4,8 +4,8 @@
 // Protocolo central do Mobile API Observability Contract.
 //
 // Cada implementador é responsável por uma única preocupação:
-//   - USPContextInstrumenter  → adiciona headers USP-*
-//   - TracingInstrumenting    → adiciona traceparent/tracestate (Iteração 2)
+//   - USPContextInstrumenter  → adiciona headers USP-* e traceparent
+//   - TracingInstrumenting    → identifica instrumentadores com W3C Trace Context
 //   - CompositeInstrumenter   → compõe múltiplos instrumentadores em cadeia
 //
 // O HTTPClient do app não precisa conhecer nenhum detalhe de observabilidade:
@@ -30,8 +30,8 @@ import Foundation
 ///
 /// ```swift
 /// let observability = CompositeInstrumenter([
-///     USPContextInstrumenter(),
-///     myTracingInstrumenter          // Iteração 2
+///     USPContextInstrumenter(configuration: configuration),
+///     anotherInstrumenter
 /// ])
 ///
 /// let request = try observability.instrument(originalRequest)

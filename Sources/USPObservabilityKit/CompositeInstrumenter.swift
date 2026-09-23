@@ -8,8 +8,8 @@
 //
 //   private let observability: any HTTPRequestInstrumenting =
 //       CompositeInstrumenter([
-//           USPContextInstrumenter(),   // USP-* headers
-//           myTracingInstrumenter       // traceparent (Iteração 2)
+//           USPContextInstrumenter(configuration: configuration),
+//           anotherInstrumenter
 //       ])
 
 import Foundation
@@ -22,8 +22,8 @@ import Foundation
 ///
 /// ```swift
 /// let composite = CompositeInstrumenter([
-///     USPContextInstrumenter(),
-///     myTracingInstrumenter
+///     USPContextInstrumenter(configuration: configuration),
+///     anotherInstrumenter
 /// ])
 ///
 /// let instrumented = try composite.instrument(request)
