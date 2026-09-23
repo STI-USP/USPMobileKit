@@ -400,6 +400,41 @@ Os módulos **não se conhecem** e podem ser usados independentemente.
 
 ---
 
+## Privacy
+
+Cada product distribui seu próprio `PrivacyInfo.xcprivacy`, incluído como resource
+do respectivo target para agregação pelo Xcode:
+
+- `USPAuthKit` declara `NSUserDefaults` com reason `CA92.1`. Os defaults privados
+  do app guardam sessão OAuth, token/plataforma de push, estado de registro e o
+  cache do usuário. O fluxo de autenticação declara User ID e Device ID vinculados
+  para App Functionality, pois o identificador do usuário e o token de push são
+  registrados juntos no backend.
+- `USPObservabilityKit` declara `UserDefaults` com reason `CA92.1`. Ele guarda um
+  UUID aleatório de instalação, sem IDFA, IDFV, serial, App Group ou Keychain. O
+  Installation ID é declarado como Device ID; versão/build do app, versão do SO,
+  modelo do dispositivo e contexto da operação são Other Diagnostic Data. Ambos
+  têm finalidade App Functionality e são enviados somente a hosts da allowlist.
+
+O package declara `NSPrivacyTracking = false`, não contém tracking domains, não
+faz publicidade, compartilhamento com data brokers nem fingerprinting. O
+`trace_id` é aleatório por operação e não representa usuário ou instalação.
+
+O `USPObservabilityKit` não conhece identidade e não vincula o Installation ID por
+conta própria. Se o app ou backend associar os headers de observabilidade a uma
+conta autenticada, retiver outros dados ou usar uma suite compartilhada de
+`UserDefaults`, o consumidor deve revisar suas declarações. Antes de distribuir,
+o app deve criar um archive no Xcode, gerar o relatório pelo menu de contexto do
+archive em **Generate Privacy Report** e manter seu manifest, política de
+privacidade e App Privacy no App Store Connect coerentes com o comportamento real
+do app e do backend.
+
+Referências: [Privacy manifest files](https://developer.apple.com/documentation/bundleresources/privacy-manifest-files),
+[Required Reason APIs](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api)
+e [App Privacy Details](https://developer.apple.com/app-store/app-privacy-details/).
+
+---
+
 ## Roadmap
 
 | Iteração | Módulo | Status |

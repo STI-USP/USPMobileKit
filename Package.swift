@@ -52,6 +52,9 @@ let package = Package(
     // API pública preservada integralmente (zero breaking changes).
     .target(
       name: "USPAuthKit",
+      resources: [
+        .process("PrivacyInfo.xcprivacy")
+      ],
       publicHeadersPath: "include",
       cSettings: [
         .headerSearchPath("Core"),
@@ -71,6 +74,9 @@ let package = Package(
     .target(
       name: "USPObservabilityKit",
       path: "Sources/USPObservabilityKit",
+      resources: [
+        .process("PrivacyInfo.xcprivacy")
+      ],
       swiftSettings: [
         .swiftLanguageMode(.v6)
       ]
