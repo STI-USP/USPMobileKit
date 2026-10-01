@@ -53,7 +53,7 @@ import USPAuthKit
 
 // Configuração (uma vez, na inicialização do app)
 USPAuthService.configure(
-    withEnvironment: .prod,
+    with: .prod,
     consumerKey:     "SEU_CONSUMER_KEY",
     consumerSecret:  "SEU_CONSUMER_SECRET",
     appKey:          "SUA_APP_KEY"
@@ -63,7 +63,6 @@ USPAuthService.configure(
 USPAuthService.shared().ensureLoggedIn(from: viewController) { user, error in
     guard let user, error == nil else { return }
     print("Autenticado: \(user.nomeUsuario)")
-    print("Token interno: \(USPAuthService.shared().currentWSUserId() ?? "")")
 }
 ```
 
@@ -77,12 +76,16 @@ USPAuthService.shared().ensureLoggedIn(from: viewController) { user, error in
 | `-ensureLoggedInFromViewController:completion:` | Login via WebView |
 | `-currentUser` | Usuário autenticado atual (`USPAuthUser?`) |
 | `-currentWSUserId` | Token funcional para APIs internas |
-| `-isLoggedIn` | Verifica se há sessão válida em cache |
-| `-logout` | Invalida sessão e limpa credenciais |
+| `-isLoggedIn` | Verifica presença local de tokens e cache de usuário; não revalida no servidor |
+| `-logout` | Limpa sessão, credenciais e push locais; invalidação remota é uma operação separada |
 | `-updateNotificationToken:` | Atualiza token de push |
 | `-registerTokenWithCompletion:` | Registra token no backend |
 | `-invalidateTokenWithCompletion:` | Invalida token no backend |
 | `-checkTokenWithCompletion:` | Consulta status do token |
+
+### Auditoria e modernização
+
+O [roadmap de modernização do USPAuthKit](docs/modernization/modernization-roadmap.md) reúne o inventário público, arquitetura, acoplamento OAuth 1, riscos de segurança e gates de evolução compatível. OAuth 2 permanece uma etapa futura, condicionada ao contrato do backend.
 
 ### Modelos
 
@@ -329,7 +332,7 @@ Crashlytics, Firebase Performance ou retry automático.
 import USPAuthKit
 // Sem import USPObservabilityKit
 
-USPAuthService.configure(withEnvironment: .prod, consumerKey: "…", consumerSecret: "…", appKey: "…")
+USPAuthService.configure(with: .prod, consumerKey: "…", consumerSecret: "…", appKey: "…")
 USPAuthService.shared().ensureLoggedIn(from: self) { user, _ in … }
 ```
 
@@ -353,7 +356,7 @@ import USPAuthKit
 import USPObservabilityKit
 
 // Auth — configuração
-USPAuthService.configure(withEnvironment: .prod, consumerKey: "…", consumerSecret: "…", appKey: "…")
+USPAuthService.configure(with: .prod, consumerKey: "…", consumerSecret: "…", appKey: "…")
 
 // Observabilidade — injetada no HTTPClient
 let observability = USPContextInstrumenter(

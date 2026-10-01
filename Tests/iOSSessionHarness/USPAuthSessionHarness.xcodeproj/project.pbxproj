@@ -1,0 +1,54 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+		000000000000000000000001 = { isa = PBXProject; attributes = { LastUpgradeCheck = 2700; }; buildConfigurationList = 00000000000000000000000A; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; knownRegions = (en, Base); mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000004; packageReferences = (000000000000000000000010,); projectDirPath = ""; projectRoot = ""; targets = (000000000000000000000005,); };
+		000000000000000000000002 = { isa = PBXGroup; children = (000000000000000000000003, 000000000000000000000004,); sourceTree = "<group>"; };
+		000000000000000000000003 = { isa = PBXGroup; name = Tests; children = (000000000000000000000013, 000000000000000000000015, 000000000000000000000017, 000000000000000000000019, 00000000000000000000001A,); sourceTree = "<group>"; };
+		000000000000000000000004 = { isa = PBXGroup; name = Products; children = (000000000000000000000006,); sourceTree = "<group>"; };
+		000000000000000000000005 = { isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000000B; buildPhases = (000000000000000000000007, 000000000000000000000008, 000000000000000000000009,); buildRules = (); dependencies = (); name = USPAuthSessionHarness; packageProductDependencies = (000000000000000000000011,); productName = USPAuthSessionHarness; productReference = 000000000000000000000006; productType = "com.apple.product-type.bundle.unit-test"; };
+		000000000000000000000006 = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = USPAuthSessionHarness.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000013 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../USPAuthKitTests/USPAuthServiceSessionTests.swift"; sourceTree = SOURCE_ROOT; };
+		000000000000000000000015 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../USPAuthKitTests/Fixtures/SwiftSessionConsumerFixture.swift"; sourceTree = SOURCE_ROOT; };
+		000000000000000000000017 = { isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "../USPAuthKitObjCFixture/USPAuthKitObjCFixture.m"; sourceTree = SOURCE_ROOT; };
+		000000000000000000000019 = { isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "BridgingHeader.h"; sourceTree = SOURCE_ROOT; };
+		00000000000000000000001A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../USPAuthKitTests/USPAuthKitTests.swift"; sourceTree = SOURCE_ROOT; };
+		000000000000000000000014 = { isa = PBXBuildFile; fileRef = 000000000000000000000013; };
+		000000000000000000000016 = { isa = PBXBuildFile; fileRef = 000000000000000000000015; };
+		000000000000000000000018 = { isa = PBXBuildFile; fileRef = 000000000000000000000017; };
+		00000000000000000000001B = { isa = PBXBuildFile; fileRef = 00000000000000000000001A; };
+		000000000000000000000012 = { isa = PBXBuildFile; productRef = 000000000000000000000011; };
+		000000000000000000000007 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000014, 000000000000000000000016, 000000000000000000000018, 00000000000000000000001B,); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000008 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000012,); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000009 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000010 = { isa = XCLocalSwiftPackageReference; relativePath = ../..; };
+		000000000000000000000011 = { isa = XCSwiftPackageProductDependency; package = 000000000000000000000010; productName = USPAuthKit; };
+		00000000000000000000000A = { isa = XCConfigurationList; buildConfigurations = (00000000000000000000000C, 00000000000000000000000D,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		00000000000000000000000B = { isa = XCConfigurationList; buildConfigurations = (00000000000000000000000E, 00000000000000000000000F,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		00000000000000000000000C = { isa = XCBuildConfiguration; name = Debug; buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 14.0; }; };
+		00000000000000000000000D = { isa = XCBuildConfiguration; name = Release; buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 14.0; }; };
+		00000000000000000000000E = { isa = XCBuildConfiguration; name = Debug; buildSettings = {
+        CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES;
+        PRODUCT_BUNDLE_IDENTIFIER = br.usp.tests.USPAuthSessionHarness;
+        PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0;
+        SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/BridgingHeader.h";
+        HEADER_SEARCH_PATHS = ("$(inherited)", "$(SRCROOT)/../USPAuthKitObjCFixture/include");
+        TARGETED_DEVICE_FAMILY = "1,2"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+        ENABLE_TESTABILITY = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+        LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks");
+    }; };
+		00000000000000000000000F = { isa = XCBuildConfiguration; name = Release; buildSettings = {
+        CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES;
+        PRODUCT_BUNDLE_IDENTIFIER = br.usp.tests.USPAuthSessionHarness;
+        PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0;
+        SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/BridgingHeader.h";
+        HEADER_SEARCH_PATHS = ("$(inherited)", "$(SRCROOT)/../USPAuthKitObjCFixture/include");
+        TARGETED_DEVICE_FAMILY = "1,2"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+        ENABLE_TESTABILITY = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+        LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks");
+    }; };
+	};
+	rootObject = 000000000000000000000001;
+}

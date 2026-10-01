@@ -65,7 +65,17 @@ let package = Package(
     ),
     .testTarget(
       name: "USPAuthKitTests",
-      dependencies: ["USPAuthKit"]
+      dependencies: [
+        "USPAuthKit",
+        .target(name: "USPAuthKitObjCFixture", condition: .when(platforms: [.iOS]))
+      ]
+    ),
+    // Test-only Objective-C consumer; not exported by either library product.
+    .target(
+      name: "USPAuthKitObjCFixture",
+      dependencies: ["USPAuthKit"],
+      path: "Tests/USPAuthKitObjCFixture",
+      publicHeadersPath: "include"
     ),
 
     // ── USPObservabilityKit ────────────────────────────────────────────────────
