@@ -1,4 +1,6 @@
-# Auditoria de segurança
+# Auditoria de segurança — baseline anterior à modernização
+
+> Auditoria histórica do baseline. Estado atual e mitigação parcial: [arquitetura implementada](../authentication/architecture.md) e [roadmap consolidado](modernization-roadmap.md). Não interpretar achados antigos como ausência das correções já realizadas.
 
 2026-10-01, baseline `11d9582`. [Roadmap e prioridades](modernization-roadmap.md). Análise de código + builds/testes locais; sem credenciais reais, servidor, app consumidor ou exploração end-to-end. Severidade é independente de P0–P3: P0 trata impedimento da migração, não significa incidente crítico.
 
@@ -56,3 +58,20 @@ Confrontar handshake/callback e normalização com [RFC 5849](https://www.rfc-ed
 Nenhum Info.plist/ATS de app existe aqui. Não há exceção ATS ou trust-all no SDK; apps podem possuir exceções externas. TLS é delegado às APIs do sistema. Manifest de Auth declara User ID/Device ID vinculados e defaults CA92.1; presença/lint não certifica App Privacy do consumidor. Perfil retornado inclui dados pessoais além dos identificadores: revisar coleta/retenção efetiva com backend e apps; não concluir conformidade só pelo SDK.
 
 Para OAuth2 futuro, a direção é browser externo e proteção apropriada de autorização em app nativo, conforme [RFC 8252](https://www.rfc-editor.org/info/rfc8252/) e [RFC 9700](https://www.rfc-editor.org/info/rfc9700/). Isso fundamenta a proposta futura, não autoriza mudar hoje o browser/handshake OAuth1. ASWebAuthenticationSession, PKCE e demais decisões aguardam contrato do servidor.
+
+## Evolução após o baseline — composição interna
+
+Os achados acima descrevem `11d9582`, não o estado inteiro após modernização.
+S04 foi corrigido isoladamente: scratch SHA1 local alinhado, redução HMAC em
+buffer próprio e entradas const; quatro casos curtos/longos reproduzidos antes,
+mesmos digests depois, ASan/UBSan e vetores iOS aprovados. S02/S03 possuem
+validação/correlação de callback, completion única, cancelamento e descarte por
+geração; testes cobrem resultados tardios de token/perfil/registro e operações
+mobile. Callback real e apresentação/swipe ainda precisam homologação.
+
+S01 permanece alto: **nenhum segredo foi migrado a Keychain**. S05/S06/S07/S08 e
+outros achados não devem ser tratados como corrigidos por extração arquitetural.
+Política de status/perfil/registro, logs/PII, namespace/schema, nonce e servidor
+seguem pendentes. Não foi executado pentest/login real nem comprovada mitigação
+universal. Ver [arquitetura e mudanças comportamentais](../authentication/architecture.md)
+e [validação](validation.md#composição-interna-e-hardening--2026-10-01).

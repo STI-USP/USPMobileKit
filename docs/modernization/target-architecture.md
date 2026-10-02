@@ -1,4 +1,6 @@
-# Arquitetura alvo proposta
+# Arquitetura alvo proposta — baseline anterior à modernização
+
+> Registro do baseline anterior à extração. A arquitetura efetivamente implementada está em [docs/authentication/architecture.md](../authentication/architecture.md); headers públicos permanecem intactos.
 
 Proposta baseada na revisão `11d9582`; **não implementada**. [Roadmap](modernization-roadmap.md) · [Estado atual](current-architecture.md).
 

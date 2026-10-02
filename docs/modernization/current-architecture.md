@@ -1,4 +1,6 @@
-# Arquitetura atual do USPAuthKit
+# Arquitetura atual do USPAuthKit — baseline anterior à modernização
+
+> Registro do baseline anterior à extração. A arquitetura efetivamente implementada está em [docs/authentication/architecture.md](../authentication/architecture.md); headers públicos permanecem intactos.
 
 Auditoria em 2026-10-01, commit `11d9582`. Documento principal: [roadmap](modernization-roadmap.md). A fonte de verdade é o código desta revisão, não os walkthroughs históricos.
 

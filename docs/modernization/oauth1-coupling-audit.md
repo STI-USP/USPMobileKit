@@ -1,4 +1,6 @@
-# Acoplamento OAuth 1
+# Acoplamento OAuth 1 — baseline anterior à modernização
+
+> Registro do baseline anterior à extração. A arquitetura efetivamente implementada está em [docs/authentication/architecture.md](../authentication/architecture.md); headers públicos permanecem intactos.
 
 Baseline `11d9582`, 2026-10-01. [Inventário público](public-api-inventory.md) · [Roadmap](modernization-roadmap.md).
 

@@ -1,4 +1,87 @@
-# Roadmap incremental de modernização do USPAuthKit
+# Roadmap de modernização do USPAuthKit — estado consolidado
+
+2026-10-02, branch feature/auth-architecture-modernization. Fonte de verdade:
+[arquitetura implementada](../authentication/architecture.md). Integração:
+[README](../../README.md#uspauthkit), [apps legados](../authentication/consumer-migration.md),
+[apps novos](../authentication/new-integration.md). [Validação](validation.md) e
+[consolidação](../iterations/10-auth-consolidation/walkthrough.md) registram evidência.
+
+OAuth1 permanece implementação atual/default. OAuth2 não foi implementado nem
+modelado. Compatibilidade é mantida com adapters baratos, não exige perpetuar
+keys/WK/credenciais OAuth nos consumidores. Nenhuma API pública removida/deprecada
+por annotation, endpoint ou schema alterado na consolidação. Sem commit.
+
+## Status atual por entrega
+
+| Item | Implementação | Testes automáticos | Homologação real / pendência |
+|---|---|---|---|
+| R01 | Inventário Cardápio disponível | Não é tarefa de implementação | Parcial: lista autoritativa e demais consumidores pendentes |
+| R02 | Concluído: contrato de sessão e fixtures | 24 testes baseline intactos, Swift/ObjC executados, checker5 | Runtime14 não validado; não reabrir R02 por tarefa posterior |
+| R03 | Não executado: contrato de mecanismo futuro | Fake não especifica backend futuro | Pendência com responsável/backend |
+| R04 | Transporte privado injetável com URLSession/cancel handle, aplicado tokens/perfil/mobile | URLProtocol/fakes: sucesso/status/erro/vazio/cancel | Integração OAuth1+mobile validada no Cardápio |
+| R05 | Store contratual + adapter UserDefaults legado | Load/save/partial/corrupt/clear/isolamento/restauração | Perfil/vínculos restaurados no piloto; Keychain e outro envelope pendentes |
+| R06 | UI por instância e browser abstraction | Callback único, cancel/finish/handoff, erro antes/depois | Login válido iPhone homologado; todas variantes swipe/iPad não certificadas |
+| R07 | Clock/nonce e signer determinísticos privados | Encoding/header/base string/HMAC/request/access | Wire válido no fluxo real; não significa todas políticas R15 concluídas |
+| R08 | Provider OAuth1/coordinator/fachada e compatibility adapters | Fake independente OAuth1 entrega perfil completo | Provider atual homologado; outro mecanismo inexistente |
+| R09 | Perfil canônico + backend mobile separado sem tokenSecret | Perfil/vínculos/raw shape/registro/check/invalidate/push | Perfil/wsuserid/registro/completion homologados; DEV vazio vs PROD vínculos |
+| R10 | Não executado: Keychain | Não há teste de migração Keychain | Secrets continuam defaults; etapa própria transacional/versionada |
+| R11 | Callback/correlation, cancel/logout/generation/late results implementados | Regressão WK102, reentrância, invalid callback, pré-callback, cancel/logout/late | Callback real correlacionado e sucesso após correção homologados; UI completa não certificada |
+| R12 | Concluído no escopo buffers C S04 | Quatro casos, vetores, entradas intactas, ASan/UBSan/concorrência | Digests preservados; não substitui auditoria crypto completa |
+| R13 | Não concluído: status/payload/parser/registro/atomicidade | Baseline permissivo caracterizado | Contrato/política explícita ainda necessária |
+| R14 | Parcial: exemplos seguros e diagnóstico temporário removido | Testes comportamentais preservados | description/erros/logs legados ainda exigem hardening próprio |
+| R15 | Não concluído: nonce/time/redirect/cache/TLS policies | Vetores atuais são baseline, não nova política | Backend/evidência necessários |
+| R16 | Fronteira neutra demonstrada, config app/provider privada separada | Fake sem consumer fields/tokens/WK com duas configs | Envelope/config/capabilities futuros dependem R03; não concluído |
+| R17 | Harness iOS/fixtures/checker existentes | Build/link/execução local disponíveis | CI/runner/runtime14 e todos ambientes ainda pendentes |
+| R18–R20 | Não executados como entregas próprias | Nenhum gate novo declarado | Observer/frameworks/helper cleanup/UI opcional separados |
+| R21 | OAuth2 não implementado | Nenhum código/speculativo | Só após contrato backend |
+| R22 | Piloto OAuth1 Cardápio homologado no escopo documentado | Regressões permanentes executáveis | Demais apps/rollout/rollback ensaiado e migração futura ainda pendentes |
+
+## Gates por fase
+
+- Fase0: R02 completo; R01 parcial, lista de consumidores ainda necessária.
+- Fases1/2: composição/transporte/store/browser/provider/coordinator/mobile
+  implementados, protegidos por testes e caminho válido homologado no Cardápio.
+- Fase3: S04 corrigido, callback/cancel/late protegidos; fase inteira aberta por
+  Keychain, status/payload/logs/policies e variantes de integração não executadas.
+- Fase4: domínio/config/perfil neutros demonstrados; contrato backend/envelope
+  futuro não definido. Não exigir formato OAuth1 de mecanismo futuro.
+- Fase5: nenhum OAuth2/modelo refresh/scopes/PKCE/bearer fictício implementado.
+- Fase6: primeiro piloto OAuth1 validado; não equivale a migrar todos consumidores.
+
+## Evidência Cardápio e próxima tarefa
+
+Responsável homologou pacote local no iPhone: request/auth/callback/verifier/access,
+perfil/USPAuthUser/wsuserid/vínculos/persistência/restauração, registro e completion,
+uso do identificador em recursos. DEV retornou vinculo:[] e PROD vínculos esperados:
+nenhuma perda em parsing/identity/userData. Regressão WK102 pós-callback foi corrigida
+com handoff de ownership, não remoção de validação. Testes permanentes reproduzem
+sequência e controles. AuthDebug/helpers temporários removidos nesta consolidação.
+
+Única próxima tarefa recomendada: **R03 — especificar com o responsável/backend
+como um mecanismo futuro autentica e entrega o perfil USP/wsuserid**, configuração
+por aplicativo, serviços mobile, redirects e capacidades efetivamente suportadas.
+Usar contratos existentes como evidência, sem projetar campos/endpoints de OAuth2
+por suposição. Esta tarefa não foi executada.
+
+---
+
+## Organização física implementada — 2026-10-02
+
+Diretórios produtivos e de testes espelham as responsabilidades existentes;
+[árvore real](../authentication/architecture.md#organização-do-código) e
+[mapa47moves](../iterations/11-auth-layout/file-map.md). Nenhum protocolo novo,
+provider2, API renomeada, endpoint/schema ou comportamento alterado. Perfil separado
+fisicamente da sessão (mesmo USPIdentity), provider1/crypto confinados. R02 e fake
+neutro intactos;64Auth iOS executados após reorganização. R01/R03/R10 e demais
+pendências anteriores mantidas. Não equivale a novo gate de OAuth2/Keychain/runtime14.
+
+## Histórico da auditoria e das iterações
+
+O conteúdo abaixo registra o baseline e o progresso por data. Afirmações como
+"proposta", "nenhum login real" ou "homologação pendente" descrevem aquele momento,
+não o estado consolidado acima. Prioridades/esforços originais permanecem rastreáveis.
+
+# Registro histórico do roadmap e progresso
 
 **Documento principal da auditoria — 2026-10-01, baseline `11d9582`.** Nesta entrega somente documentação; nenhum OAuth2, endpoint, API, dependência, criptografia ou comportamento foi alterado. O USPAuthKit integra o package **USPMobileKit**.
 
@@ -185,3 +268,88 @@ lista de consumidores e auditar o próximo consumidor confirmado**, priorizando
 usos de tokens, login WK ou keys internas. Não iniciar R04–R08 nesta etapa.
 [Validação documental](validation.md#r01--auditoria-do-consumidor-cardápio-usp) ·
 [Walkthrough](../iterations/05-consumer-audit/walkthrough.md).
+
+## Composição interna e hardening — 2026-10-01
+
+**Premissa revisada pelo responsável:** controle dos aplicativos permite migração
+coordenada. Compatibilidade continua desejável; vazamentos de storage/WK/par OAuth
+não são requisitos permanentes. A instrução anterior de aguardar fechamento de
+R01 para R04–R08 foi supersedida por autorização explícita desta implementação.
+R01 segue parcial e não se extrapolou a evidência do Cardápio.
+
+Estado efetivo: [arquitetura implementada](../authentication/architecture.md),
+[guia de consumidores](../authentication/consumer-migration.md),
+[walkthrough](../iterations/06-auth-composition/walkthrough.md) e
+[validação](validation.md#composição-interna-e-hardening--2026-10-01).
+
+| Item | Progresso comprovado / gate restante |
+|---|---|
+| R02 | Mantido intacto; 24 testes Auth do baseline executados antes/depois |
+| R04 | Implementado: transporte privado arbitrário + URLSession adapter e cancel handle, aplicado tokens/perfil/mobile; fake/URLProtocol sem internet |
+| R05 | Implementado: contrato privado de sessão e adapter defaults legado; isolamento/corrupt/partial/clear testados. Sem alteração schema/Keychain |
+| R06 | Implementado: UI pertence à operação/instância; browser privado, callback consumido uma vez, cancel/finish/KVO cleanup. Homologação UI real/piloto ainda necessária |
+| R07 | Implementado: clock/nonce injetáveis e vetores request/access/profile/base string/HMAC/encoding/header; formato/política legada preservados |
+| R08 | Implementado: provider1/coordinator/fachada, adapters públicos, composição privada com provider alternativo sintético sem OAuth1 |
+| R09 | Implementado: identidade + credencial mobile opaca e cliente registro/consulta/invalidação/push sem secret; endpoints/payloads preservados |
+| R11 | Proteções S02/S03 implementadas e testadas: destino/correlação, completion única, generations, logout/cancel/late/mobile. **Parcial no gate de homologação:** confirmar callback real/piloto, swipe e apresentação real |
+| R12 | Concluído no escopo S04: quatro casos reproduzidos, buffers próprios/const, digests iguais, testes C com ASan/UBSan e concorrência; vetores OAuth iOS passam |
+| R10 | Não executado: credenciais continuam em defaults; migração Keychain própria, transacional e versionada |
+| R13–R15 | Não concluídos: status/payload/registro, logs/PII e políticas nonce/time/redirect; não corrigidos incidentalmente |
+| R16 | Fronteira neutra demonstrada com double; envelope/config/capabilities/coexistência ainda dependem R03. Não concluído |
+| R21/OAuth2 | Não implementado |
+
+Gates locais das extrações Fases1/2: build iOS, suite com fakes, baseline R02,
+fixtures ObjC/Swift e checker passam. Isso não prova autenticação com servidor
+real nem compatibilidade iOS14/runtime antigo. Gate operacional/piloto permanece
+aberto; Fase0 completa e Fase3 inteira **não** foram marcadas concluídas.
+Headers públicos intactos; sem breaking change de assinatura ou de persistência.
+Comportamentos de segurança mudaram deliberadamente: callback antes tolerado é
+rejeitado; cancel/logout concluem operações em voo uma vez e impedem writes
+posteriores. Adapters não têm depreciações compiláveis novas.
+
+**Única próxima tarefa: R03 — especificar com backend o contrato de identidade e
+credencial mobile para OAuth2**, incluindo obtenção/relação de wsuserid, perfil,
+registro/push, endpoints/redirect suportado, capacidades de renovação/revogação e
+coexistência/rollback. Usar o Cardápio e os contratos executáveis como evidência;
+não assumir que bearer substitui wsuserid. Essa especificação deverá definir o
+escopo de R16 e os pré-requisitos de R21. Nenhuma implementação OAuth2 nesta etapa.
+
+## Revisão do domínio — 2026-10-02
+
+Informação confirmada pelo responsável: **wsuserid é identificador operacional USP
+integrante do perfil padrão entregue aos apps**, não credencial de um provider.
+A descrição anterior de MobileCredential era uma hipótese arquitetural e foi
+substituída. USPMobileCredential apenas envolvia esse campo e foi removido.
+Backend conserva metadata de app/push e flag local; usa USPAuthUser.wsuserid.
+
+Configuração interna da aplicação agora é distinta da configuração específica
+OAuth1; USPAuthConfig combinado permanece adapter público. Identidade tipada
+USPAuthUser/USPAuthVinculo pode ser produzida sem JSON de protocolo. Fake independente
+prova autenticação nova + perfil completo + registro com duas configs de app.
+R02 continua intacto; ver [arquitetura](../authentication/architecture.md) e
+[walkthrough](../iterations/07-auth-domain-review/walkthrough.md).
+Não foi especificado/modelado outro protocolo; R03 não foi executado.
+
+
+## Regressão de integração OAuth1 — 2026-10-02
+
+Trace real Cardápio/iPhone confirmou callback localhost e correlação válidos;
+erro de navegação102 depois do handoff cancelava access exchange. Patch mínimo no
+browser distingue callback consumido de apresentação concluída, sem relaxar
+validação e sem ignorar102 antes do callback. Reprodução XCTest falhou antes;
+62Auth iOS passam depois, incluindo baseline/fake/fixtures e controles de cancel.
+**R11/gate de homologação ainda aberto:** falta nova tentativa real pós-patch com
+perfil/wsuserid/registro/completion e navegação Cardápio. Não iniciar outra etapa
+com base apenas na suite. [Causa/evidência](../iterations/08-oauth1-integration-regression/walkthrough.md).
+
+
+## Homologação OAuth1 e investigação de perfil — 2026-10-02
+
+Responsável homologou fluxo real Cardápio/iPhone após patch browser: tokens,
+perfil, registro, completion e uso de wsuserid em recursos bem-sucedidos.
+Gate desse fluxo real de R11 atendido; controles gerais de apresentação/swipe/
+ambientes não foram universalmente homologados. Registros anteriores de
+homologação pendente são históricos. Problema separado: Perfil sem vínculos;
+[diagnóstico09](../iterations/09-profile-relationships/walkthrough.md) instrumenta
+estrutura sem PII e protege metadata/restauração. 66Auth iOS passaram. Não marcar
+paridade completa de perfil até observar contagens reais. Sem OAuth2 ou nova fase.

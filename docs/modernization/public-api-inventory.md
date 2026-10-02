@@ -1,4 +1,6 @@
-# Inventário do contrato público
+# Inventário do contrato público — baseline anterior à modernização
+
+> Registro do baseline anterior à extração. A arquitetura efetivamente implementada está em [docs/authentication/architecture.md](../authentication/architecture.md); headers públicos permanecem intactos.
 
 Baseline `11d9582`, 2026-10-01. [Roadmap](modernization-roadmap.md).
 

@@ -195,3 +195,35 @@ Faltam para fechar R01/gate de consumidores da Fase0:
 Não houve login, tráfego remoto, build/test do consumidor ou resolução SPM. Não foram examinados resultados antigos/SDKs em TestResults como evidência de callers atuais. Esta análise não verifica expiração/rotação, autorização real, cancelamento ou comportamento de requests tardios. O mínimo iOS14 do SDK segue a limitação de R02 registrada na validation.
 
 **Única próxima tarefa recomendada: continuar R01, levantando com as equipes a lista autoritativa dos consumidores e auditando o próximo consumidor confirmado.** R02 já protege o contrato local, mas este primeiro consumidor revela que compatibilidade de API não cobre storage externo; fechar essa lacuna antes de R04–R08 evita projetar store/provider com premissas falsas. R03 continua gate obrigatório futuro, sem ser implementado aqui.
+
+
+### Piloto real da arquitetura modernizada — homologação 2026-10-02
+
+O responsável integrou a revisão local de USPMobileKit/USPAuthKit em
+feature/auth-architecture-modernization ao Cardápio e homologou no iPhone físico.
+Não foi publicada nova versão nem alterado o consumidor pelo agente. A auditoria
+anterior de 1.4.5 permanece histórica; esta evidência refere-se à integração local.
+
+Confirmados: request token200, authorization WK, callback real http://localhost/
+com parâmetros OAuth esperados e token correlacionado, verifier, access200,
+profile200/application-json/dictionary, USPAuthUser/wsuserid, registro200 e
+completion com usuário. Identificador funciona nas demais requisições do app.
+Responsável confirmou perfil/vínculos e persistência/restauração. Não registrar
+valores reais, quantidade pessoal específica, campos de vínculo ou PII.
+
+DEV retornou vinculo:[]; PROD retornou os vínculos esperados. SDK manteve o payload,
+perfil tipado, metadata/identity/userData e restauração. A ausência em DEV não era
+regressão nem motivou normalização/parsing novo. Modelos tipados permanecem caminho
+recomendado; consumidor ainda deve abandonar dicionário cru em migração controlada.
+
+Regressão causal observada e corrigida: falha WK102 após callback consumido era
+propagada como cancelamento e cancelava access exchange (-999). Browser agora
+transfere ownership antes de policyCancel; erro posterior não determina protocolo.
+Erro pré-callback, callback inválido, cancel/logout/late results permanecem tratados.
+Teste permanente com valores sintéticos reproduziu falha antes do patch e sucesso
+depois, incluindo perfil/registro/completion única. Diagnóstico temporário removido.
+
+Piloto OAuth1 homologado no escopo acima, não certificação de todos fluxos push,
+iPad/swipe/ambientes, runtime14 ou demais consumidores. R01 segue parcial. Não há
+OAuth2 nem promessa de credencial futura equivalente. Próximas migrações do app:
+perfil tipado, keys/isRegistered e registro próprio inventariados; nada alterado aqui.
