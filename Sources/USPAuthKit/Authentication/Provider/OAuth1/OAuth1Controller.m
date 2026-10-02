@@ -322,7 +322,7 @@ static NSString * CHQueryStringFromParametersWithEncoding(NSDictionary *paramete
 }
 + (NSString *)callbackRejectionReason:(NSURL *)url requestToken:(NSString *)token {
   NSURLComponents *parts = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
-  BOOL localHTTP = ([parts.scheme.lowercaseString isEqual:@"http"] || [parts.scheme.lowercaseString isEqual:@"https"]) && [parts.host.lowercaseString isEqual:@"localhost"] && !parts.port && !parts.user && !parts.password && (!parts.path.length || [parts.path isEqual:@"/"]);
+  BOOL localHTTP = ([parts.scheme.lowercaseString isEqual:@"http"] || [parts.scheme.lowercaseString isEqual:@"https"]) && [parts.host.lowercaseString isEqual:@"localhost"] && (!parts.port || (parts.port.integerValue >= 1 && parts.port.integerValue <= 65535)) && !parts.user && !parts.password && (!parts.path.length || [parts.path isEqual:@"/"] || [parts.path isEqual:@"/login.aspx"]);
   BOOL literalLocal = !parts.scheme && !parts.host && [parts.path isEqual:@"localhost"];
   if (!localHTTP && !literalLocal) return @"destination";
   if (parts.fragment.length && ![parts.fragment isEqual:@"_=_"]) return @"fragment";
