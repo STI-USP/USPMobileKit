@@ -6,7 +6,7 @@ O repositório hospeda **products SPM independentes** — cada aplicativo import
 
 ```
 USPMobileKit
-├── USPAuthKit           — autenticação OAuth 1.0a
+├── USPAuthKit           — autenticação, sessão e perfil USP
 └── USPObservabilityKit  — observabilidade (Mobile API Observability Contract)
 ```
 
@@ -33,68 +33,106 @@ Selecione somente o(s) product(s) necessários para o target. O product
 
 ## USPAuthKit
 
-Autenticação interna via OAuth 1.0a + pós-processamento de usuário USP.
+Package que fornece **autenticação, sessão local e acesso padronizado à identidade
+e ao perfil USP** para aplicativos iOS em Swift e Objective-C.
 
-### O que faz
+```text
+USPAuthKit
+├── autenticação
+├── sessão
+└── perfil USP
+    ├── identidade básica
+    ├── wsuserid
+    └── vínculos institucionais
+```
 
-1. Executa OAuth 1.0a (`request_token → authorize → access_token`).
-2. Obtém dados do usuário via `POST /wsusuario/oauth/usuariousp`.
-3. Monta e cacheia `USPAuthUser` com vínculos institucionais.
-4. Usa `wsuserid` para registrar o token no backend mobile (`/mobile/servicos/oauth/registrar`).
+- [Integração de novos aplicativos](docs/integration/new-integration.md)
+- [Migração de aplicativos legados](docs/integration/legacy-migration.md)
+- [Arquitetura interna](docs/authentication/architecture.md)
 
-### Instalação
+O consumidor trabalha com `USPAuthService`, `USPAuthUser` e `USPAuthVinculo`.
+OAuth1 é o provider atualmente implementado, um detalhe interno do fluxo.
 
-No Xcode, selecione o produto **USPAuthKit**.
+### Requisitos e instalação
 
-### Uso rápido (Swift)
+iOS **14+ declarado**, Swift Package Manager e toolchain compatível com Swift tools
+**6.1**. Sem dependências SPM externas. UIKit fornece o `UIViewController` que
+apresenta o login. Há validação automatizada no Simulator iOS27 e homologação
+real do Cardápio no iPhone; runtime iOS14 ainda não tem validação registrada.
+Veja [evidências e limites](docs/modernization/validation.md).
+
+No Xcode, use **File → Add Package Dependencies** com
+`https://github.com/STI-USP/USPMobileKit.git`, escolha a release publicada aprovada
+para seu app e adicione o product **USPAuthKit** ao target. Importe `USPAuthKit`;
+o nome do package é `USPMobileKit`. Não é necessário adicionar Observability.
+
+### Quick Start
+
+Configure uma vez no bootstrap com os dados próprios do aplicativo. Chame o login
+na UI, com um controller apto a apresentar, e continue somente com usuário e sem
+erro. As funções abaixo são exemplos do app, não novos métodos do package:
 
 ```swift
+import UIKit
 import USPAuthKit
 
-// Configuração (uma vez, na inicialização do app)
-USPAuthService.configure(
-    withEnvironment: .prod,
-    consumerKey:     "SEU_CONSUMER_KEY",
-    consumerSecret:  "SEU_CONSUMER_SECRET",
-    appKey:          "SUA_APP_KEY"
-)
+func configurarAutenticacaoUSP() {
+    USPAuthService.configure(
+        with: .prod,
+        consumerKey: "CONSUMER_KEY_DO_APP",
+        consumerSecret: "CONSUMER_SECRET_DO_APP",
+        appKey: "APP_KEY_DO_APP"
+    )
+}
 
-// Login
-USPAuthService.shared().ensureLoggedIn(from: viewController) { user, error in
-    guard let user, error == nil else { return }
-    print("Autenticado: \(user.nomeUsuario)")
-    print("Token interno: \(USPAuthService.shared().currentWSUserId() ?? "")")
+func entrarNaUSP(from presenter: UIViewController,
+                aoConcluir: @escaping @MainActor @Sendable (USPAuthUser) -> Void) {
+    USPAuthService.shared().ensureLoggedIn(from: presenter) { user, error in
+        DispatchQueue.main.async {
+            guard error == nil, let user else {
+                // Apresente falha/cancelamento na UI, sem registrar dados sensíveis.
+                return
+            }
+            // Perfil: user.nomeUsuario e user.loginUsuario.
+            // Recursos USP: user.wsuserid, conforme o contrato do serviço.
+            // Vínculos: user.vinculos, lista de USPAuthVinculo.
+            aoConcluir(user)
+        }
+    }
+}
+
+func perfilUSPEmCache() -> USPAuthUser? {
+    USPAuthService.shared().currentUser()
+}
+
+func sairDaUSP() {
+    USPAuthService.shared().logout()
 }
 ```
 
-### API pública principal
+`consumerKey`/`consumerSecret` são configuração do provider OAuth1 atual por app;
+secret embarcado no aplicativo não é segredo seguro. `appKey` identifica o app
+no backend mobile. Base custom e `backendHeaderValue` estão no
+[guia de configuração](docs/integration/new-integration.md#4-configuração-do-aplicativo).
 
-| Símbolo | Descrição |
-|---|---|
-| `USPAuthService.shared()` | Singleton do serviço em Swift (`+sharedService` em Objective-C) |
-| `+configureWithEnvironment:consumerKey:consumerSecret:appKey:` | Configuração rápida |
-| `+configureWithConfig:` | Configuração explícita com `USPAuthConfig` |
-| `-ensureLoggedInFromViewController:completion:` | Login via WebView |
-| `-currentUser` | Usuário autenticado atual (`USPAuthUser?`) |
-| `-currentWSUserId` | Token funcional para APIs internas |
-| `-isLoggedIn` | Verifica se há sessão válida em cache |
-| `-logout` | Invalida sessão e limpa credenciais |
-| `-updateNotificationToken:` | Atualiza token de push |
-| `-registerTokenWithCompletion:` | Registra token no backend |
-| `-invalidateTokenWithCompletion:` | Invalida token no backend |
-| `-checkTokenWithCompletion:` | Consulta status do token |
+`wsuserid` é o identificador operacional USP retornado no perfil e utilizado pelos
+aplicativos para consumir recursos dos serviços mobile que adotam esse contrato.
+Não é OAuth access token nem número USP. Strings podem ser vazias; vínculos podem
+estar ausentes conforme a resposta. Consuma o perfil tipado, sem ler JSON/defaults.
 
-### Modelos
+`currentUser()` consulta o perfil local e pode existir com sessão incompleta.
+`isLoggedIn()` verifica estado local, sem comprovar validade remota. `logout()`
+limpa sessão/perfil/push/registro local e cancela operações em curso; não promete
+revogação, invalidação mobile automática, encerramento SSO ou limpeza de cookies.
+O aplicativo limpa seus próprios caches pessoais.
 
-- `USPAuthUser`: usuário autenticado com vínculos institucionais.
-- `USPAuthVinculo`: vínculo de unidade/setor do usuário.
-- `USPAuthConfig`: configuração de ambiente (dev / prod / custom).
-- `USPAuthEnvironment`: enum `.dev`, `.prod`, `.custom`.
-
-### Requisitos
-
-- iOS 14+
-- Sem dependências SPM externas
+Push e operações mobile são complementares; veja
+[push e backend mobile](docs/integration/new-integration.md#10-push-e-backend-mobile).
+`userData`, tokens OAuth e login com WebView própria permanecem por compatibilidade,
+mas não são recomendados para novas integrações. Use o
+[playbook de migração](docs/integration/legacy-migration.md) para remover esses
+acoplamentos progressivamente. Persistência atual ainda é legada; este guia não
+introduz migração para Keychain nem especifica outro provider.
 
 ---
 
@@ -323,16 +361,6 @@ Crashlytics, Firebase Performance ou retry automático.
 
 ---
 
-## Exemplo: app usando somente Auth
-
-```swift
-import USPAuthKit
-// Sem import USPObservabilityKit
-
-USPAuthService.configure(withEnvironment: .prod, consumerKey: "…", consumerSecret: "…", appKey: "…")
-USPAuthService.shared().ensureLoggedIn(from: self) { user, _ in … }
-```
-
 ## Exemplo: app usando somente Observabilidade
 
 ```swift
@@ -346,40 +374,6 @@ let request = try observability.instrument(URLRequest(url: url))
 let (data, _) = try await URLSession.shared.data(for: request)
 ```
 
-## Exemplo: app usando Auth + Observabilidade
-
-```swift
-import USPAuthKit
-import USPObservabilityKit
-
-// Auth — configuração
-USPAuthService.configure(withEnvironment: .prod, consumerKey: "…", consumerSecret: "…", appKey: "…")
-
-// Observabilidade — injetada no HTTPClient
-let observability = USPContextInstrumenter(
-    configuration: ObservabilityConfiguration(allowedHosts: ["api.usp.br"])
-)
-
-final class APIClient {
-    private let observability: any HTTPRequestInstrumenting
-    init(observability: any HTTPRequestInstrumenting) { self.observability = observability }
-
-    func get(_ url: URL) async throws -> Data {
-        var request = URLRequest(url: url)
-        // Auth adiciona Authorization via wsuserid
-        if let token = USPAuthService.shared().currentWSUserId() {
-            request.setValue(token, forHTTPHeaderField: "Authorization")
-        }
-        // Observabilidade adiciona USP-* e traceparent somente ao host autorizado
-        let instrumented = try observability.instrument(request)
-        let (data, _) = try await URLSession.shared.data(for: instrumented)
-        return data
-    }
-}
-```
-
----
-
 ## Arquitetura
 
 ```
@@ -390,7 +384,7 @@ final class APIClient {
     USPAuthKit              USPObservabilityKit
          │                         │
    autenticação              observabilidade
-   OAuth 1.0a                USP-* + traceparent
+   perfil / provider          USP-* + traceparent
    sessão / logout           allowlist de hosts
    usuário USP               composição de
                              instrumentadores
@@ -451,6 +445,10 @@ e [App Privacy Details](https://developer.apple.com/app-store/app-privacy-detail
 ```bash
 swift test --parallel
 ```
+
+O host não executa o serviço Auth iOS. Para a suíte do serviço e fixtures
+Swift/Objective-C, use o [harness iOS](Tests/iOSSessionHarness/README.md) e consulte
+a [validação registrada](docs/modernization/validation.md).
 
 ---
 
