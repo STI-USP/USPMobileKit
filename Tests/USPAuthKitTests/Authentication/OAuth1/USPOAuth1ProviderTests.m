@@ -72,7 +72,38 @@
     NSString *normalized = [valid stringByReplacingOccurrencesOfString:@"_= _" withString:@"_=_"];
     XCTAssertNotNil([OAuth1Controller validatedCallbackURL:[NSURL URLWithString:normalized] requestToken:@"rt"]);
   }
-  for (NSString *invalid in @[@"https://evil.invalid/?oauth_token=rt&oauth_verifier=v", @"http://localhost/other?oauth_token=rt&oauth_verifier=v", @"http://localhost/?oauth_token=other&oauth_verifier=v", @"http://localhost/?oauth_token=rt&oauth_verifier=", @"http://localhost/?oauth_token=rt&oauth_verifier=v&oauth_verifier=x", @"http://localhost:80/?oauth_token=rt&oauth_verifier=v", @"http://localhost/?oauth_token=rt&oauth_verifier=v#unexpected"]) XCTAssertNil([OAuth1Controller validatedCallbackURL:[NSURL URLWithString:invalid] requestToken:@"rt"]);
+  for (NSString *invalid in @[@"https://evil.invalid/?oauth_token=rt&oauth_verifier=v", @"http://localhost/other?oauth_token=rt&oauth_verifier=v", @"http://localhost/?oauth_token=other&oauth_verifier=v", @"http://localhost/?oauth_token=rt&oauth_verifier=", @"http://localhost/?oauth_token=rt&oauth_verifier=v&oauth_verifier=x", @"http://localhost/?oauth_token=rt&oauth_verifier=v#unexpected"]) XCTAssertNil([OAuth1Controller validatedCallbackURL:[NSURL URLWithString:invalid] requestToken:@"rt"]);
+}
+
+- (void)testCallbackAcceptsLocalHTTPDestinationsWithOptionalPortAndLoginPath {
+  for (NSString *destination in @[@"http://localhost/", @"http://localhost", @"http://localhost:49152/login.aspx", @"https://localhost:49152/login.aspx", @"http://localhost/login.aspx", @"http://localhost:80/", @"http://localhost:1/login.aspx", @"https://localhost:65535/login.aspx"]) {
+    NSURL *url = [NSURL URLWithString:[destination stringByAppendingString:@"?oauth_token=rt&oauth_verifier=v"]];
+    XCTAssertNotNil(url);
+    XCTAssertNil([OAuth1Controller callbackRejectionReason:url requestToken:@"rt"], @"%@", destination);
+    XCTAssertNotNil([OAuth1Controller validatedCallbackURL:url requestToken:@"rt"]);
+  }
+}
+
+- (void)testCallbackRejectionReasonsPreservedForLocalLoginPath {
+  NSDictionary *cases = @{
+    @"http://other.invalid:49152/login.aspx?oauth_token=rt&oauth_verifier=v": @"destination",
+    @"http://localhost:49152/other?oauth_token=rt&oauth_verifier=v": @"destination",
+    @"http://user@localhost:49152/login.aspx?oauth_token=rt&oauth_verifier=v": @"destination",
+    @"http://user:password@localhost:49152/login.aspx?oauth_token=rt&oauth_verifier=v": @"destination",
+    @"http://localhost:0/login.aspx?oauth_token=rt&oauth_verifier=v": @"destination",
+    @"http://localhost:65536/login.aspx?oauth_token=rt&oauth_verifier=v": @"destination",
+    @"http://localhost:49152/login.aspx?oauth_token=other&oauth_verifier=v": @"token_mismatch",
+    @"http://localhost:49152/login.aspx?oauth_token=rt": @"missing_verifier",
+    @"http://localhost:49152/login.aspx?oauth_verifier=v": @"missing_token",
+    @"http://localhost:49152/login.aspx?oauth_token=rt&oauth_verifier=v&oauth_verifier=x": @"duplicate_query",
+    @"http://localhost:49152/login.aspx?oauth_token=rt&oauth_verifier=v#unexpected": @"fragment"
+  };
+  for (NSString *callback in cases) {
+    NSURL *url = [NSURL URLWithString:callback];
+    XCTAssertNotNil(url);
+    XCTAssertEqualObjects([OAuth1Controller callbackRejectionReason:url requestToken:@"rt"], cases[callback], @"%@", callback);
+  }
+  XCTAssertNil([OAuth1Controller callbackRejectionReason:[NSURL URLWithString:@"https://localhost:49152/login.aspx?oauth_token=rt&oauth_verifier=v#_=_"] requestToken:@"rt"]);
 }
 
 - (void)testInvalidCallbackDoesNotExchangeAccessToken {
