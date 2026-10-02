@@ -2,8 +2,8 @@
 
 2026-10-02, branch feature/auth-architecture-modernization. Fonte de verdade:
 [arquitetura implementada](../authentication/architecture.md). Integração:
-[README](../../README.md#uspauthkit), [apps legados](../authentication/consumer-migration.md),
-[apps novos](../authentication/new-integration.md). [Validação](validation.md) e
+[README](../../README.md#uspauthkit), [apps legados](../integration/legacy-migration.md),
+[apps novos](../integration/new-integration.md). [Validação](validation.md) e
 [consolidação](../iterations/10-auth-consolidation/walkthrough.md) registram evidência.
 
 OAuth1 permanece implementação atual/default. OAuth2 não foi implementado nem
@@ -278,7 +278,7 @@ R01 para R04–R08 foi supersedida por autorização explícita desta implementa
 R01 segue parcial e não se extrapolou a evidência do Cardápio.
 
 Estado efetivo: [arquitetura implementada](../authentication/architecture.md),
-[guia de consumidores](../authentication/consumer-migration.md),
+[guia de consumidores](../integration/legacy-migration.md),
 [walkthrough](../iterations/06-auth-composition/walkthrough.md) e
 [validação](validation.md#composição-interna-e-hardening--2026-10-01).
 

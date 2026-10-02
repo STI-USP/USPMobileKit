@@ -5,6 +5,8 @@ sem dependências novas, com mínimo declarado iOS14. OAuth2 não existe nesta
 implementação. A [auditoria original](../modernization/current-architecture.md)
 descreve o estado anterior; este documento descreve o código resultante.
 
+[Nova integração](../integration/new-integration.md) · [Migração de legado](../integration/legacy-migration.md) · [README](../../README.md#uspauthkit)
+
 ## Responsabilidade do SDK e fonte de verdade
 
 Este documento é a fonte de verdade da arquitetura implementada. USPAuthKit oferece
@@ -285,7 +287,7 @@ remota do identificador e política de registro não são deduzidas de seu nome;
 permanecem limites observáveis do backend. Remover wrapper não muda endpoints.
 
 Ver [validação](../modernization/validation.md#composição-interna-e-hardening--2026-10-01),
-[guia dos consumidores](consumer-migration.md) e
+[guia de migração vigente](../integration/legacy-migration.md) e
 [walkthrough](../iterations/06-auth-composition/walkthrough.md).
 
 ### Ownership após o callback OAuth1
