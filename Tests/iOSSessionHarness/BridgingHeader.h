@@ -1,1 +1,1 @@
-#import "../USPAuthKitObjCFixture/include/USPAuthKitObjCFixture.h"
+#import "../USPAuthKitTests/Compatibility/ObjectiveC/include/USPAuthKitObjCFixture.h"

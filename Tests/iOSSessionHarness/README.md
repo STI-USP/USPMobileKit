@@ -65,3 +65,15 @@ funções da fixture e a amostra de métodos exercitada, não esses símbolos C.
 A suíte de sessão é explicitamente skipped no host macOS sem UIKit. Não confundir
 esse skip com execução da implementação iOS. No Simulator foram executados
 18 testes de sessão e os 6 testes Auth existentes, sem skips.
+
+
+## Organização após modernização
+
+R02 em USPAuthKitTests/Public; modelos baseline em Profile; fixtures Swift e ObjC
+em Compatibility. Quarenta métodos internos foram distribuídos em categorias da
+mesma classe XCTest sob Authentication/OAuth1, Profile, Session, MobileBackend,
+Infrastructure e Compatibility, com Support compartilhado. O harness compila todos,
+com as implementações produtivas do product SPM;64Auth testes iOS ao todo.
+SPM não mistura Swift/ObjC: exclui áreas ObjC do testTarget Swift e conserva target
+separado para fixture ObjC. Crypto C sanitizado executa pelo script no host.
+Nenhum método R02 foi editado pela movimentação. Não confundir host skip com iOS.

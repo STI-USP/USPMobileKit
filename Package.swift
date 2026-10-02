@@ -57,9 +57,19 @@ let package = Package(
       ],
       publicHeadersPath: "include",
       cSettings: [
-        .headerSearchPath("Core"),
-        .headerSearchPath("UI"),
-        .headerSearchPath("Adapters")
+        .headerSearchPath("Authentication"),
+        .headerSearchPath("Authentication/Composition"),
+        .headerSearchPath("Authentication/Provider"),
+        .headerSearchPath("Authentication/Provider/OAuth1"),
+        .headerSearchPath("Authentication/Provider/OAuth1/Crypto"),
+        .headerSearchPath("Configuration"),
+        .headerSearchPath("Infrastructure/Browser"),
+        .headerSearchPath("Infrastructure/Networking"),
+        .headerSearchPath("Infrastructure/Security"),
+        .headerSearchPath("Legacy/Persistence"),
+        .headerSearchPath("MobileBackend"),
+        .headerSearchPath("Profile"),
+        .headerSearchPath("Session")
       ],
       swiftSettings: extraFlags
     ),
@@ -68,13 +78,17 @@ let package = Package(
       dependencies: [
         "USPAuthKit",
         .target(name: "USPAuthKitObjCFixture", condition: .when(platforms: [.iOS]))
-      ]
+      ],
+      // Internal Objective-C tests run in the iOS harness; SwiftPM cannot mix languages.
+      exclude: ["Authentication", "Infrastructure", "MobileBackend", "Session", "Support",
+                "Profile/USPProfilePreservationTests.m",
+                "Compatibility/USPAuthFacadeCompatibilityTests.m", "Compatibility/ObjectiveC"]
     ),
     // Test-only Objective-C consumer; not exported by either library product.
     .target(
       name: "USPAuthKitObjCFixture",
       dependencies: ["USPAuthKit"],
-      path: "Tests/USPAuthKitObjCFixture",
+      path: "Tests/USPAuthKitTests/Compatibility/ObjectiveC",
       publicHeadersPath: "include"
     ),
 
