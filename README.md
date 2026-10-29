@@ -2,12 +2,13 @@
 
 Infraestrutura compartilhada para os aplicativos iOS da STI/USP.
 
-O repositório hospeda **products SPM independentes** — cada aplicativo importa somente os módulos de que precisa, sem carregar dependências desnecessárias.
+O repositório hospeda **products SPM independentes** — cada aplicativo importa somente os módulos de que precisa. A resolução SwiftPM considera as dependências declaradas pelo pacote, inclusive Firebase; somente USPJourneyKit as vincula ao target iOS.
 
 ```
 USPMobileKit
 ├── USPAuthKit           — autenticação, sessão e perfil USP
-└── USPObservabilityKit  — observabilidade (Mobile API Observability Contract)
+├── USPObservabilityKit  — observabilidade (Mobile API Observability Contract)
+└── USPJourneyKit        — jornadas funcionais, Analytics e diagnósticos seletivos
 ```
 
 Os módulos podem coexistir no mesmo app, mas **não possuem dependência entre si**. Importar `USPObservabilityKit` não requer `USPAuthKit` e vice-versa.
@@ -17,7 +18,7 @@ Os módulos podem coexistir no mesmo app, mas **não possuem dependência entre 
 ## Instalação
 
 O nome do package é **`USPMobileKit`** e os products SPM são
-**`USPAuthKit`** e **`USPObservabilityKit`**. A URL Git canônica é:
+**`USPAuthKit`**, **`USPObservabilityKit`** e **`USPJourneyKit`**. A URL Git canônica é:
 
 ```
 https://github.com/STI-USP/USPMobileKit.git
@@ -56,7 +57,7 @@ OAuth1 é o provider atualmente implementado, um detalhe interno do fluxo.
 ### Requisitos e instalação
 
 iOS **14+ declarado**, Swift Package Manager e toolchain compatível com Swift tools
-**6.1**. Sem dependências SPM externas. UIKit fornece o `UIViewController` que
+**6.1**. O target Auth não depende de Firebase. UIKit fornece o `UIViewController` que
 apresenta o login. Há validação automatizada no Simulator iOS27 e homologação
 real do Cardápio no iPhone; runtime iOS14 ainda não tem validação registrada.
 Veja [evidências e limites](docs/modernization/validation.md).
@@ -376,6 +377,10 @@ let (data, _) = try await URLSession.shared.data(for: request)
 
 ## Arquitetura
 
+O produto adicional `USPJourneyKit` é independente dos dois módulos abaixo e
+contém sua própria integração Firebase, sem um produto USPJourneyFirebase separado.
+Veja [arquitetura de jornadas](docs/architecture/journey-kit.md).
+
 ```
                USPMobileKit (repositório)
                       │
@@ -409,6 +414,10 @@ do respectivo target para agregação pelo Xcode:
   Installation ID é declarado como Device ID; versão/build do app, versão do SO,
   modelo do dispositivo e contexto da operação são Other Diagnostic Data. Ambos
   têm finalidade App Functionality e são enviados somente a hosts da allowlist.
+- `USPJourneyKit` declara interações de produto para Analytics e contexto
+  diagnóstico para App Functionality. Não usa APIs que exijam reason próprio.
+  Firebase distribui seus manifests; o consumidor deve revisar a agregação e
+  possíveis vínculos à identidade conforme sua configuração.
 
 O package declara `NSPrivacyTracking = false`, não contém tracking domains, não
 faz publicidade, compartilhamento com data brokers nem fingerprinting. O
@@ -436,6 +445,7 @@ e [App Privacy Details](https://developer.apple.com/app-store/app-privacy-detail
 | 1 | `USPAuthKit` | ✅ Disponível |
 | 1 | `USPObservabilityKit` | ✅ Disponível |
 | 2 | W3C Trace Context no `USPObservabilityKit` | ✅ Disponível — sem OTel SDK |
+| 13 | `USPJourneyKit` | Implementado nesta alteração; publicação e aceite Firebase pendentes |
 | 3 | `USPObservabilityFirebase` | 🔲 Planejado — Performance + Crashlytics |
 
 ---
@@ -449,6 +459,22 @@ swift test --parallel
 O host não executa o serviço Auth iOS. Para a suíte do serviço e fixtures
 Swift/Objective-C, use o [harness iOS](Tests/iOSSessionHarness/README.md) e consulte
 a [validação registrada](docs/modernization/validation.md).
+
+## USPJourneyKit
+
+Produto único com cinco eventos do contrato v1, UUID por tentativa, etapas e
+parâmetros controlados, terminais únicos e tentativas concorrentes. Integra
+Firebase Analytics e diagnósticos técnicos seletivos no Crashlytics; não
+configura Firebase, consentimento ou instrumentação dos apps automaticamente.
+As políticas de envio começam desativadas e devem ser fornecidas pelo app.
+
+- [Integração e exemplo](docs/journeys/integration.md)
+- [Arquitetura e privacidade](docs/architecture/journey-kit.md)
+- [Conformidade compartilhada com Android](docs/journeys/conformance.md)
+- [Plano](docs/iterations/13-journey-kit/plan.md) e [validação](docs/iterations/13-journey-kit/walkthrough.md)
+
+iOS 14 preservado; Firebase `11.15.0..<12.0.0`, Analytics sem Ad ID. Apps que
+exigem Firebase 12+ precisam resolver a incompatibilidade antes da adoção.
 
 ---
 
