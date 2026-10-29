@@ -1,0 +1,43 @@
+{
+  "contract_version": "1",
+  "definition": {
+    "type": "TEST-J001",
+    "initial_stage": "obter",
+    "stages": ["obter", "apresentar"],
+    "completion_stages": ["apresentar"]
+  },
+  "cases": [
+    {
+      "name": "success",
+      "actions": ["start", "advance", "complete", "complete", "cancel"],
+      "expected": [
+        {"name": "jornada_iniciada", "parameters": {"id_jornada": "<attempt>", "tipo_jornada": "TEST-J001", "versao_contrato": "1"}},
+        {"name": "etapa_jornada", "parameters": {"id_jornada": "<attempt>", "tipo_jornada": "TEST-J001", "versao_contrato": "1", "etapa_jornada": "apresentar"}},
+        {"name": "jornada_concluida", "parameters": {"id_jornada": "<attempt>", "tipo_jornada": "TEST-J001", "versao_contrato": "1", "resultado": "sucesso"}}
+      ]
+    },
+    {
+      "name": "failure",
+      "actions": ["start", "fail", "complete"],
+      "expected": [
+        {"name": "jornada_iniciada", "parameters": {"id_jornada": "<attempt>", "tipo_jornada": "TEST-J001", "versao_contrato": "1"}},
+        {"name": "jornada_falhou", "parameters": {"id_jornada": "<attempt>", "tipo_jornada": "TEST-J001", "versao_contrato": "1", "resultado": "falha", "etapa_falha": "obter", "categoria_erro": "tempo_esgotado"}}
+      ]
+    },
+    {
+      "name": "explicit_cancel",
+      "actions": ["start", "cancel", "complete"],
+      "expected": [
+        {"name": "jornada_iniciada", "parameters": {"id_jornada": "<attempt>", "tipo_jornada": "TEST-J001", "versao_contrato": "1"}},
+        {"name": "jornada_cancelada", "parameters": {"id_jornada": "<attempt>", "tipo_jornada": "TEST-J001", "versao_contrato": "1", "resultado": "cancelado", "etapa_jornada": "obter"}}
+      ]
+    },
+    {
+      "name": "lost_context_without_terminal",
+      "actions": ["start", "forget", "cancel"],
+      "expected": [
+        {"name": "jornada_iniciada", "parameters": {"id_jornada": "<attempt>", "tipo_jornada": "TEST-J001", "versao_contrato": "1"}}
+      ]
+    }
+  ]
+}

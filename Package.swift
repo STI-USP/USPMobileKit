@@ -5,6 +5,7 @@
 // Products independentes:
 //   • USPAuthKit          — autenticação OAuth 1.0a
 //   • USPObservabilityKit — instrumentação de requests (Mobile API Observability Contract)
+//   • USPJourneyKit       — jornadas funcionais e integração Firebase
 //
 // Cada app importa somente o(s) product(s) de que precisa.
 // Não existe dependência entre USPAuthKit e USPObservabilityKit.
@@ -42,10 +43,29 @@ let package = Package(
     // W3C Trace Context mínimo pertence ao USPObservabilityKit e não usa OTel SDK.
     // Um adapter OpenTelemetry futuro só deve existir quando tracing completo for aprovado.
 
-    // ─── (Iteração 3) USPObservabilityFirebase — Performance + Crashlytics ─────
-    // Será adicionado quando a integração Firebase for introduzida.
+    .library(name: "USPJourneyKit", targets: ["USPJourneyKit"]),
+  ],
+  dependencies: [
+    // Firebase 12+ requires iOS 15. Preserve the package's iOS 14 contract.
+    .package(url: "https://github.com/firebase/firebase-ios-sdk", "11.15.0"..<"12.0.0"),
   ],
   targets: [
+    .target(
+      name: "USPJourneyKit",
+      dependencies: [
+        .product(name: "FirebaseCore", package: "firebase-ios-sdk", condition: .when(platforms: [.iOS])),
+        .product(name: "FirebaseAnalyticsWithoutAdIdSupport", package: "firebase-ios-sdk", condition: .when(platforms: [.iOS])),
+        .product(name: "FirebaseCrashlytics", package: "firebase-ios-sdk", condition: .when(platforms: [.iOS])),
+      ],
+      resources: [.process("PrivacyInfo.xcprivacy")],
+      swiftSettings: [.swiftLanguageMode(.v6)]
+    ),
+    .testTarget(
+      name: "USPJourneyKitTests",
+      dependencies: ["USPJourneyKit"],
+      resources: [.process("Fixtures")],
+      swiftSettings: [.swiftLanguageMode(.v6)]
+    ),
 
     // ── USPAuthKit ─────────────────────────────────────────────────────────────
     // Target Objective-C/C legado. Não possui dependências SPM externas.
@@ -112,7 +132,7 @@ let package = Package(
     ),
     .testTarget(
       name: "USPMobileKitCompatibilityTests",
-      dependencies: ["USPAuthKit", "USPObservabilityKit"],
+      dependencies: ["USPAuthKit", "USPObservabilityKit", "USPJourneyKit"],
       path: "Tests/USPMobileKitCompatibilityTests"
     ),
 
