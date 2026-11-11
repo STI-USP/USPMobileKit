@@ -473,8 +473,8 @@ As políticas de envio começam desativadas e devem ser fornecidas pelo app.
 - [Conformidade compartilhada com Android](docs/journeys/conformance.md)
 - [Plano](docs/iterations/13-journey-kit/plan.md) e [validação](docs/iterations/13-journey-kit/walkthrough.md)
 
-iOS 14 preservado; Firebase `11.15.0..<12.0.0`, Analytics sem Ad ID. Apps que
-exigem Firebase 12+ precisam resolver a incompatibilidade antes da adoção.
+O pacote mantém iOS 14. Cada app seleciona a versão e os produtos Firebase
+compatíveis com seu deployment target e fornece as chamadas de envio ao reporter.
 
 ---
 

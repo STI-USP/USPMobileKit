@@ -1,5 +1,5 @@
 import XCTest
-@testable import USPJourneyKit
+import USPJourneyKit
 
 @MainActor final class FirebaseJourneyReporterTests: XCTestCase {
     private func definition() throws -> JourneyDefinition {
@@ -8,7 +8,7 @@ import XCTest
 
     func testDefaultPolicyNeverTouchesFirebase() async throws {
         let sink = SinkSpy()
-        let reporter = FirebaseJourneyReporter(policy: JourneyCollectionPolicy(), sink: sink)
+        let reporter = sink.makeReporter()
         let coordinator = JourneyCoordinator(reporter: reporter, diagnosticReporter: reporter)
         let a = try coordinator.start(definition())
         try coordinator.fail(a, at: "obter", category: .timeout, reporting: .reportableTechnical)
@@ -20,8 +20,8 @@ import XCTest
     func testCollectionPolicyIsDynamicAndChannelsAreIndependent() async throws {
         let gate = Gate()
         let sink = SinkSpy()
-        let reporter = FirebaseJourneyReporter(policy: JourneyCollectionPolicy(
-            allowsAnalytics: { gate.analytics }, allowsDiagnostics: { gate.diagnostics }), sink: sink)
+        let reporter = sink.makeReporter(policy: JourneyCollectionPolicy(
+            allowsAnalytics: { gate.analytics }, allowsDiagnostics: { gate.diagnostics }))
         let coordinator = JourneyCoordinator(reporter: reporter, diagnosticReporter: reporter)
         let a = try coordinator.start(definition()) // both false
         gate.diagnostics = true
@@ -32,14 +32,14 @@ import XCTest
         gate.diagnostics = false
         let b = try coordinator.start(definition())
         try coordinator.fail(b, at: "obter", category: .timeout, reporting: .reportableTechnical)
-        XCTAssertEqual(sink.events.map(\.name), [.started, .failed])
+        XCTAssertEqual(sink.events.map(\.name), [JourneyEventName.started.rawValue, JourneyEventName.failed.rawValue])
         XCTAssertEqual(sink.diagnostics.count, 1)
     }
 
     func testUnconfiguredProjectDoesNotConsumeFunctionalFlow() async throws {
         let sink = SinkSpy()
         sink.configured = false
-        let reporter = FirebaseJourneyReporter(policy: JourneyCollectionPolicy(allowsAnalytics: { true }), sink: sink)
+        let reporter = sink.makeReporter(policy: JourneyCollectionPolicy(allowsAnalytics: { true }))
         var issueCount = 0
         let coordinator = JourneyCoordinator(reporter: reporter, onRecordingIssue: { _ in issueCount += 1 })
         let a = try coordinator.start(definition())
@@ -51,38 +51,50 @@ import XCTest
 
     func testEachDiagnosticKeepsItsOwnContextAcrossConcurrentAttempts() async throws {
         let sink = SinkSpy()
-        let reporter = FirebaseJourneyReporter(policy: JourneyCollectionPolicy(allowsDiagnostics: { true }), sink: sink)
+        let reporter = sink.makeReporter(policy: JourneyCollectionPolicy(allowsDiagnostics: { true }))
         let coordinator = JourneyCoordinator(reporter: reporter, diagnosticReporter: reporter)
         let a = try coordinator.start(definition())
         let b = try coordinator.start(definition())
         try coordinator.fail(b, at: "obter", category: .timeout, reporting: .reportableTechnical)
         try coordinator.fail(a, at: "obter", category: .invalidData, reporting: .reportableTechnical)
-        XCTAssertEqual(sink.diagnostics[0].parameters["id_jornada"], b.id.uuidString.lowercased())
-        XCTAssertEqual(sink.diagnostics[1].parameters["id_jornada"], a.id.uuidString.lowercased())
-        XCTAssertEqual(sink.diagnostics[1].parameters["categoria_erro"], "dados_invalidos")
+        XCTAssertEqual(sink.diagnostics[0].parameters["id_jornada"] as? String, b.id.uuidString.lowercased())
+        XCTAssertEqual(sink.diagnostics[1].parameters["id_jornada"] as? String, a.id.uuidString.lowercased())
+        XCTAssertEqual(sink.diagnostics[1].parameters["categoria_erro"] as? String, "dados_invalidos")
+        XCTAssertEqual(sink.diagnostics.map { $0.error.domain }, ["br.usp.mobile.journey", "br.usp.mobile.journey"])
+        XCTAssertEqual(sink.diagnostics.map { $0.error.code }, [1, 1])
+        XCTAssertNil(sink.diagnostics[0].error.userInfo["id_jornada"])
     }
 
     func testCollectionRevocationSuppressesLaterSendsWithoutInventingTerminal() async throws {
         let sink = SinkSpy()
         let gate = Gate()
         gate.analytics = true
-        let reporter = FirebaseJourneyReporter(policy: JourneyCollectionPolicy(allowsAnalytics: { gate.analytics }), sink: sink)
+        let reporter = sink.makeReporter(policy: JourneyCollectionPolicy(allowsAnalytics: { gate.analytics }))
         let coordinator = JourneyCoordinator(reporter: reporter)
         let a = try coordinator.start(definition())
         gate.analytics = false
         try coordinator.complete(a, at: "obter")
-        XCTAssertEqual(sink.events.map(\.name), [.started])
+        XCTAssertEqual(sink.events.map(\.name), [JourneyEventName.started.rawValue])
         XCTAssertEqual(coordinator.activeAttemptCount, 0)
     }
 }
 
 @MainActor private final class Gate { var analytics = false; var diagnostics = false }
-@MainActor private final class SinkSpy: JourneyFirebaseSink {
+@MainActor private final class SinkSpy {
     var configured = true
     var configurationChecks = 0
-    var isConfigured: Bool { configurationChecks += 1; return configured }
-    var events: [JourneyEvent] = []
-    var diagnostics: [JourneyDiagnostic] = []
-    func log(_ event: JourneyEvent) { events.append(event) }
-    func record(_ diagnostic: JourneyDiagnostic) { diagnostics.append(diagnostic) }
+    var events: [(name: String, parameters: [String: Any])] = []
+    var diagnostics: [(error: NSError, parameters: [String: Any])] = []
+
+    func makeReporter(policy: JourneyCollectionPolicy = JourneyCollectionPolicy()) -> FirebaseJourneyReporter {
+        FirebaseJourneyReporter(
+            policy: policy,
+            isConfigured: {
+                self.configurationChecks += 1
+                return self.configured
+            },
+            logEvent: { self.events.append(($0, $1)) },
+            recordError: { self.diagnostics.append(($0, $1)) }
+        )
+    }
 }

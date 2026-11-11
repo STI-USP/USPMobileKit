@@ -15,53 +15,44 @@ import Foundation
     }
 }
 
-@MainActor protocol JourneyFirebaseSink: AnyObject {
-    var isConfigured: Bool { get }
-    func log(_ event: JourneyEvent) throws
-    func record(_ diagnostic: JourneyDiagnostic) throws
-}
-
 public enum FirebaseJourneyReportingError: Error, Equatable, Sendable {
     case firebaseNotConfigured
-    case unsupportedPlatform
 }
 
-/// Uses the app's already configured default Firebase project. No configure(),
-/// consent changes, user IDs, raw errors or global Crashlytics custom keys.
+/// Sends formatted journey events through the Firebase SDK supplied by the app.
+/// The app owns SDK configuration and collection settings.
 @MainActor public final class FirebaseJourneyReporter: JourneyReporting, JourneyDiagnosticReporting {
-    private let sink: any JourneyFirebaseSink
     private let policy: JourneyCollectionPolicy
+    private let isConfigured: @MainActor () -> Bool
+    private let logEvent: @MainActor (String, [String: Any]) throws -> Void
+    private let recordError: @MainActor (NSError, [String: Any]) throws -> Void
 
-    public convenience init(policy: JourneyCollectionPolicy = JourneyCollectionPolicy()) {
-        #if os(iOS)
-        self.init(policy: policy, sink: FirebaseSDKJourneySink())
-        #else
-        self.init(policy: policy, sink: UnavailableJourneyFirebaseSink())
-        #endif
-    }
-
-    init(policy: JourneyCollectionPolicy, sink: any JourneyFirebaseSink) {
+    public init(
+        policy: JourneyCollectionPolicy = JourneyCollectionPolicy(),
+        isConfigured: @escaping @MainActor () -> Bool,
+        logEvent: @escaping @MainActor (String, [String: Any]) throws -> Void,
+        recordError: @escaping @MainActor (NSError, [String: Any]) throws -> Void
+    ) {
         self.policy = policy
-        self.sink = sink
+        self.isConfigured = isConfigured
+        self.logEvent = logEvent
+        self.recordError = recordError
     }
 
     public func record(_ event: JourneyEvent) throws {
         guard policy.allowsAnalytics() else { return }
-        guard sink.isConfigured else { throw FirebaseJourneyReportingError.firebaseNotConfigured }
-        try sink.log(event)
+        guard isConfigured() else { throw FirebaseJourneyReportingError.firebaseNotConfigured }
+        try logEvent(event.name.rawValue, event.parameters)
     }
 
     public func record(_ diagnostic: JourneyDiagnostic) throws {
         guard policy.allowsDiagnostics() else { return }
-        guard sink.isConfigured else { throw FirebaseJourneyReportingError.firebaseNotConfigured }
-        try sink.record(diagnostic)
+        guard isConfigured() else { throw FirebaseJourneyReportingError.firebaseNotConfigured }
+
+        // Keep the grouping stable and attach context only to this occurrence.
+        let error = NSError(domain: "br.usp.mobile.journey", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: "Reportable journey technical failure"
+        ])
+        try recordError(error, diagnostic.parameters)
     }
 }
-
-#if !os(iOS)
-@MainActor private final class UnavailableJourneyFirebaseSink: JourneyFirebaseSink {
-    var isConfigured: Bool { false }
-    func log(_ event: JourneyEvent) throws { throw FirebaseJourneyReportingError.unsupportedPlatform }
-    func record(_ diagnostic: JourneyDiagnostic) throws { throw FirebaseJourneyReportingError.unsupportedPlatform }
-}
-#endif

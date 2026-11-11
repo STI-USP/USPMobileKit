@@ -1,8 +1,8 @@
 # Integração incremental
 
-Adicionar o produto `USPJourneyKit` ao target iOS somente após revisar o grafo
-Firebase e a plataforma mínima. Esta alteração não foi publicada como release.
-Não apontar apps automaticamente para uma tag ainda inexistente.
+Adicionar o produto `USPJourneyKit` ao target iOS. O USPMobileKit não inclui o
+SDK Firebase no grafo do pacote. O app mantém a versão e os produtos Firebase
+compatíveis com seu deployment target.
 
 ## Composição
 
@@ -10,6 +10,9 @@ O app configura seu Firebase padrão e suas políticas fora do kit. Criar uma
 instância durável de reporter/coordenador por composição do app, em MainActor:
 
 ```swift
+import FirebaseAnalytics
+import FirebaseCore
+import FirebaseCrashlytics
 import USPJourneyKit
 
 @MainActor
@@ -17,10 +20,19 @@ func makeJourneys(
     allowsAnalytics: @escaping @MainActor () -> Bool,
     allowsDiagnostics: @escaping @MainActor () -> Bool
 ) -> JourneyCoordinator {
-    let reporter = FirebaseJourneyReporter(policy: JourneyCollectionPolicy(
-        allowsAnalytics: allowsAnalytics,
-        allowsDiagnostics: allowsDiagnostics
-    ))
+    let reporter = FirebaseJourneyReporter(
+        policy: JourneyCollectionPolicy(
+            allowsAnalytics: allowsAnalytics,
+            allowsDiagnostics: allowsDiagnostics
+        ),
+        isConfigured: { FirebaseApp.app() != nil },
+        logEvent: { name, parameters in
+            Analytics.logEvent(name, parameters: parameters)
+        },
+        recordError: { error, context in
+            Crashlytics.crashlytics().record(error: error, userInfo: context)
+        }
+    )
     return JourneyCoordinator(reporter: reporter, diagnosticReporter: reporter)
 }
 ```
@@ -81,8 +93,6 @@ de coleta; não encaminha automaticamente todo erro funcional ao Crashlytics.
 
 ## Release e aceite
 
-Mudança aditiva de API, mas novo grafo externo Firebase afeta a resolução de todos
-os consumidores. Antes de tag: revisar versão semântica pelo mantenedor, validar
-consumidores representativos, manifest de privacidade e grafo no Xcode. Não
-publicada/tagueada nesta tarefa. Aprovação de matrizes por app e recebimento real
-dos eventos no Firebase/DebugView e diagnósticos controlados ficam no aceite STI-15.
+Antes de publicar, validar a resolução e o build no app consumidor. O
+recebimento real no Firebase e os diagnósticos controlados ficam no aceite
+STI-15. As regras e matrizes aprovadas por app orientam a instrumentação.

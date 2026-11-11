@@ -45,18 +45,9 @@ let package = Package(
 
     .library(name: "USPJourneyKit", targets: ["USPJourneyKit"]),
   ],
-  dependencies: [
-    // Firebase 12+ requires iOS 15. Preserve the package's iOS 14 contract.
-    .package(url: "https://github.com/firebase/firebase-ios-sdk", "11.15.0"..<"12.0.0"),
-  ],
   targets: [
     .target(
       name: "USPJourneyKit",
-      dependencies: [
-        .product(name: "FirebaseCore", package: "firebase-ios-sdk", condition: .when(platforms: [.iOS])),
-        .product(name: "FirebaseAnalyticsWithoutAdIdSupport", package: "firebase-ios-sdk", condition: .when(platforms: [.iOS])),
-        .product(name: "FirebaseCrashlytics", package: "firebase-ios-sdk", condition: .when(platforms: [.iOS])),
-      ],
       resources: [.process("PrivacyInfo.xcprivacy")],
       swiftSettings: [.swiftLanguageMode(.v6)]
     ),

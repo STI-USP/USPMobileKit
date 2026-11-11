@@ -81,20 +81,41 @@ durante a preparação dos commits.
 - Nenhuma política de cache/próxima refeição, janela de abandono ou semântica
   específica das jornadas Cardápio foi aprovada pelo código desta biblioteca.
 
-## Compatibilidade e publicação
+## Compatibilidade da implementação inicial
 
 Firebase 11.15..<12 preserva iOS 14; Analytics usa produto sem suporte a Ad ID.
 O pacote passa a resolver grafo Firebase mesmo quando o consumidor seleciona só
 Auth/Observability, embora esses targets não vinculem Firebase. Lockfile desta
 validação não substitui o do consumidor.
 
-**Bloqueio conhecido de adoção:** Cardápio exige Firebase >=12.12.1 e não resolve
-com esta faixa. Decidir explicitamente plataforma/linha Firebase da distribuição
-antes de adotar a nova release; não há downgrade ou mudança de app nesta entrega.
-A API é aditiva, mas o impacto no grafo exige revisão de release pelos mantenedores.
+Na implementação inicial, o Firebase >=12.12.1 do Cardápio+ não resolvia
+com a faixa do pacote. A revisão abaixo remove essa restrição.
 
-Antes da adoção: resolver esse conflito, validar consumidores
-e ambiente mínimo suportado, aprovar semântica do contrato/matrizes, publicar
-versão do pacote e instrumentar piloto em tarefas próprias. Recebimento real
-Firebase permanece no aceite STI-15. Ver [arquitetura](../../architecture/journey-kit.md)
-e [integração](../../journeys/integration.md).
+## Revisão de compatibilidade — 11/11/2026
+
+O manifesto do USPMobileKit agora mantém iOS 14 sem dependências externas. O
+`FirebaseJourneyReporter` permanece no USPJourneyKit com a política de coleta,
+a serialização e o diagnóstico por ocorrência. O app fornece a verificação de
+configuração e as chamadas a Analytics e Crashlytics no inicializador. Essa
+mudança substitui o inicializador da branch ainda não publicada. Os demais
+produtos e o contrato de eventos mantêm suas interfaces.
+
+Validação na cópia da branch:
+
+- A suíte SwiftPM no macOS passou sem falhas, com um teste de UIKit ignorado.
+- Os targets e bundles de teste compilaram para iOS 15 Simulator. O target
+  USPJourneyKit também compilou para arm64 de dispositivo iOS 15.
+- O exemplo do [guia de integração](../../journeys/integration.md) passou no
+  typecheck Swift 6 para dispositivo com os módulos reais do Firebase 12.19.3,
+  versão resolvida no checkout local do Cardápio+.
+- A inspeção do manifesto confirmou os três produtos, o mínimo iOS 14 e a
+  lista vazia de dependências. A API pública do Auth, os testes de crypto e o
+  manifest de privacidade passaram nas verificações.
+
+Para a versão 2.3.0, o build Debug arm64 para dispositivo do Cardápio+ também
+passou no Xcode. A cópia isolada do app resolveu o Firebase 12.19.3, incluiu
+o produto USPJourneyKit e compilou e linkou o exemplo de composição do guia.
+O build foi feito sem assinatura e sem upload de símbolos.
+
+Os bundles iOS e o app não foram executados. A execução em iOS 14 e o
+recebimento real no Firebase continuam pendentes de validação.

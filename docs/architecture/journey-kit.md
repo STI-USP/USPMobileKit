@@ -76,25 +76,20 @@ do conjunto Firebase do consumidor.
 
 ## Distribuição e compatibilidade
 
-O target iOS depende de FirebaseCore, FirebaseAnalyticsWithoutAdIdSupport e
-FirebaseCrashlytics; a implementação faz parte do único produto. Domínio e
-coordenação conhecem apenas protocolos/eventos. Não há FirebaseApp.configure,
-outro projeto Firebase, mudança de consentimento/coleta global, setUserID ou
-alterações no USPAuthKit/USPObservabilityKit.
+O `FirebaseJourneyReporter` permanece no único produto. Ele aplica a política,
+formata eventos e cria o diagnóstico sanitizado. O app fornece as chamadas de
+configuração, Analytics e Crashlytics usando os SDKs que já resolve. Essa
+composição fica na inicialização do app e é compartilhada entre suas jornadas.
 
-Mantido iOS 14. Firebase 12 e 13 declaram iOS 15; por isso a faixa desta entrega
-é 11.15..<12. Em macOS o domínio/testes compilam sem SDK Firebase; o reporter real
-é iOS. A distribuição iOS continua vinculada ao Firebase mesmo usando mock em
-runtime. `Package.resolved` serve à validação deste repositório; consumidores
-resolvem o grafo e lockfile próprios.
+O manifesto mantém iOS 14 e não declara dependência do Firebase. Cada app pode
+resolver sua versão do SDK e usar o deployment target correspondente. Isso
+remove o conflito entre a faixa Firebase 11 do desenho inicial e o Firebase
+12.12.1 exigido pelo Cardápio+. Consumidores de USPAuthKit e USPObservabilityKit
+continuam independentes do Firebase por meio do USPMobileKit.
 
-Cardápio atualmente exige Firebase >=12.12.1: existe conflito de resolução.
-Não adotar esta faixa no piloto sem decisão explícita. Alternativas a avaliar
-separadamente: revisão aprovada da plataforma mínima e Firebase do package, ou
-estratégia de versões compatíveis para consumidores legados. Não efetuar downgrade
-do app nem elevar iOS mínimo incidentalmente.
+O reporter recebe as operações no inicializador, em vez de criá-las por conta
+própria. O formato dos eventos e diagnósticos permanece no kit. Ver o [guia de
+integração](../journeys/integration.md).
 
 Referências: [STI-13](https://linear.app/sti-mobile/issue/STI-13),
-[STI-212](https://linear.app/sti-mobile/issue/STI-212),
-[Firebase release notes](https://firebase.google.com/support/release-notes/ios),
-[manifest Firebase 11.15](https://github.com/firebase/firebase-ios-sdk/blob/11.15.0/Package.swift).
+[STI-212](https://linear.app/sti-mobile/issue/STI-212).
