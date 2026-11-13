@@ -84,6 +84,12 @@
   }
 }
 
+- (void)testCallbackAcceptsLocalDefaultPath {
+  NSURL *url = [NSURL URLWithString:@"http://localhost:49152/Default.aspx?oauth_token=rt&oauth_verifier=v"];
+  NSDictionary *params = [OAuth1Controller validatedCallbackURL:url requestToken:@"rt"];
+  XCTAssertEqualObjects(params[@"oauth_verifier"], @"v");
+}
+
 - (void)testCallbackRejectionReasonsPreservedForLocalLoginPath {
   NSDictionary *cases = @{
     @"http://other.invalid:49152/login.aspx?oauth_token=rt&oauth_verifier=v": @"destination",
