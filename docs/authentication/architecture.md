@@ -244,10 +244,10 @@ curtos/longos reproduzidos antes, vetores e ASan/UBSan depois.
 
 - Callback usa `navigationAction.request.URL`, consome uma vez e exige token da
   tentativa + verifier não vazio; rejects query duplicada, destino/fragment indevidos.
-- Aceita a forma histórica `localhost?...` e os formatos legítimos
-  `http(s)://localhost/` e `http(s)://localhost:<porta>/login.aspx`, com porta
-  opcional entre 1 e 65535, sem usuário/senha e path vazio, `/` ou `/login.aspx`;
-  fragment vazio ou `_=_`. O callback real
+- Aceita a forma histórica `localhost?...` e callbacks HTTP/HTTPS para
+  `localhost`, com porta opcional entre 1 e 65535, sem usuário/senha e caminho
+  vazio, `/`, `/login.aspx` ou `/Default.aspx`. O fragmento deve estar vazio ou
+  ser `_=_`. O callback real
   `http://localhost/` com token correlacionado e verifier foi homologado no iPhone;
   variantes adicionais são cobertas automaticamente, não todas homologadas remotamente.
 - Uma autenticação por instância; tentativa concorrente retorna erro1001.
