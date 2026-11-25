@@ -21,8 +21,12 @@
   [store updateProviderState:@{@"opaque-envelope":@"fixture"} forProvider:provider.identifier];
   [store updateIdentity:[[USPIdentity alloc] initWithMetadata:@{@"wsuserid":@"mobile", @"nomeUsuario":@"Fixture"}]];
   USPAuthService *service = [[USPAuthService alloc] initWithCoordinator:[[USPAuthenticationCoordinator alloc] initWithProvider:provider store:store mobileClient:[self mobile]] legacyProvider:nil];
+  service.config = [USPAuthConfig customWithBaseURL:@"https://example.invalid" consumerKey:@"ck" consumerSecret:@"cs" appKey:@"fixture-app"];
   XCTAssertTrue(service.isLoggedIn); XCTAssertEqualObjects(service.currentWSUserId, @"mobile"); XCTAssertEqualObjects(service.currentUser.nomeUsuario, @"Fixture");
-  [service ensureLoggedInFromViewController:self.presenter completion:^(USPAuthUser *user, NSError *error) { XCTAssertNotNil(user); XCTAssertNil(error); }];
+  __block BOOL completed = NO;
+  [service ensureLoggedInFromViewController:self.presenter completion:^(USPAuthUser *user, NSError *error) { XCTAssertNotNil(user); XCTAssertNil(error); completed = YES; }];
+  XCTAssertFalse(completed); XCTAssertEqual(self.transport.requests.count, 1u);
+  [self.transport respond:0 text:@"" status:200 error:nil]; XCTAssertTrue(completed);
   XCTAssertEqual(provider.calls, 0u); XCTAssertNil(service.oauthToken); XCTAssertNil(service.oauthTokenSecret);
   [service logout]; XCTAssertNil(service.currentUser); XCTAssertFalse(service.isLoggedIn);
 }

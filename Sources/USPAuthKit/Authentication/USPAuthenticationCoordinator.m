@@ -26,6 +26,9 @@
 @property (nonatomic) NSUInteger generation;
 @property (nonatomic, copy) void (^pending)(USPAuthUser *, NSError *);
 @property (nonatomic, strong) NSMutableArray<id<USPCancellable>> *tasks;
+@property (nonatomic) BOOL notificationRegistrationPending;
+@property (nonatomic) BOOL notificationRegistrationInFlight;
+@property (nonatomic) NSUInteger notificationGeneration;
 @end
 @implementation USPAuthenticationCoordinator
 - (instancetype)initWithProvider:(id<USPAuthenticationProvider>)provider store:(id<USPAuthSessionStoring>)store mobileClient:(USPMobileBackendClient *)mobile {
@@ -43,7 +46,15 @@
   USPAuthOnMain(^{
     if (self.pending) { completion(nil, USPAuthError(1001, @"Login já em andamento.")); return; }
     USPIdentity *cached = self.session.identity;
-    if (cached && [self.provider hasCachedCredential]) {  completion(cached.user, nil); return; }
+    if (cached && [self.provider hasCachedCredential]) {
+      NSUInteger generation = ++self.generation;
+      self.pending = completion;
+      self.store.isRegistered = NO;
+      [self registerWithCompletion:^(NSError *error) {
+        if (generation == self.generation && self.pending) [self finish:error ? nil : cached.user error:error];
+      }];
+      return;
+    }
     NSUInteger generation = ++self.generation;
     self.pending = completion;
     __block BOOL authenticationHandled = NO;
@@ -53,6 +64,7 @@
 
         authenticationHandled = YES;
         if (error || !identity) { [self finish:nil error:error ?: USPAuthError(1005, @"Dados do usuário não encontrados.")]; return; }
+        self.store.isRegistered = NO;
         [self.store updateIdentity:identity];
         [self registerWithCompletion:^(NSError *error) {
           if (generation == self.generation && self.pending) [self finish:error ? nil : identity.user error:error];
@@ -66,6 +78,7 @@
   self.pending = nil;
 
   if (pending) pending(user, error);
+  if (!error && self.notificationRegistrationPending) [self registerPendingNotificationToken];
 }
 - (void)performMobile:(id<USPCancellable> (^)(void (^)(NSDictionary *, NSError *)))start completion:(void (^)(NSDictionary *, NSError *))completion {
   USPAuthOnMain(^{
@@ -101,22 +114,43 @@
     return [self.mobile checkUserIdentifier:self.session.identity.user.wsuserid completion:result];
   } completion:completion];
 }
+- (void)registerPendingNotificationToken {
+  if (self.pending || self.notificationRegistrationInFlight || !self.notificationRegistrationPending || !self.isLoggedIn) return;
+  self.notificationRegistrationPending = NO;
+  self.notificationRegistrationInFlight = YES;
+  NSUInteger generation = self.notificationGeneration;
+  NSString *registeredToken = self.notificationToken;
+  [self registerWithCompletion:^(NSError *error) {
+    if (generation != self.notificationGeneration) return;
+    self.notificationRegistrationInFlight = NO;
+    if (error) {
+      self.notificationRegistrationPending = YES;
+      NSLog(@"[USPAuth] Falha ao registrar token de push após update: %@", error.localizedDescription);
+    } else if (![(registeredToken ?: @"") isEqual:(self.notificationToken ?: @"")]) {
+      self.notificationRegistrationPending = YES;
+    }
+    if (!error && self.notificationRegistrationPending) [self registerPendingNotificationToken];
+  }];
+}
 - (void)updateNotificationToken:(NSString *)token {
   USPAuthOnMain(^{
-    if ([(token ?: @"") isEqual:(self.notificationToken ?: @"")]) return;
-    self.notificationToken = token;
-    if (self.isLoggedIn) [self registerWithCompletion:^(NSError *error) { if (error) NSLog(@"[USPAuth] Falha ao registrar token de push após update: %@", error.localizedDescription); }];
+    if (![(token ?: @"") isEqual:(self.notificationToken ?: @"")]) {
+      self.notificationToken = token;
+      self.notificationRegistrationPending = YES;
+    }
+    [self registerPendingNotificationToken];
   });
 }
 - (void)logout {
   dispatch_block_t clear = ^{
     ++self.generation;
+    ++self.notificationGeneration;
     void (^pending)(USPAuthUser *, NSError *) = self.pending;
     self.pending = nil;
     [self.provider cancel]; [self.provider clearCredential];
     NSArray *tasks = [self.tasks copy];
     [self.tasks removeAllObjects];
-    _notificationToken = nil; _notificationPlatform = @"F";
+    _notificationToken = nil; _notificationPlatform = @"F"; self.notificationRegistrationPending = NO; self.notificationRegistrationInFlight = NO;
     [self.store clearAll];
     for (id<USPCancellable> task in tasks) [task cancel];
     if (pending) pending(nil, [NSError errorWithDomain:@"LoginWebViewController" code:NSUserCancelledError userInfo:@{NSLocalizedDescriptionKey:@"Login cancelado pelo usuário."}]);
